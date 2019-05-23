@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"html"
-	"log"
 	"net/http"
+	"os"
 )
 
 type Server struct {
@@ -17,7 +17,7 @@ func (s *Server) Listen() {
 	http.ListenAndServe(":"+s.Port, nil)
 }
 
-func NewServer(port string, filePath string) {
+func NewServer(port string, filePath string) *Server {
 	server := &Server{RequestCount: 0}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
