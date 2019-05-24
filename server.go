@@ -42,7 +42,7 @@ func (s *Server) Listen() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		s.server.SetKeepAlivesEnabled(false)
+		s.server.SetKeepAlivesEnabled(true)
 		if err := s.server.Shutdown(ctx); err != nil {
 			s.logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
 		}
@@ -92,9 +92,8 @@ func index() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "Hello, World!")
+		w.WriteHeader(http.StatusNoContent)
+		fmt.Fprintln(w, "")
 	})
 }
 
