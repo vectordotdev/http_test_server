@@ -27,6 +27,14 @@ var (
 
 var summaryPath = "/tmp/http_test_server_summary.json"
 
+type ESVersion struct {
+	Number string `json:"number"`
+}
+
+type ESMeta struct {
+	Version *ESVersion `json:"version"`
+}
+
 type Server struct {
 	address      string
 	file         *os.File
@@ -96,6 +104,44 @@ func (s *Server) WriteSummary() {
 	}
 
 	log.Printf("Wrote activity summary to %s", summaryPath)
+}
+
+func (s *Server) ElasticsearchRoot() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		meta := &ESMeta{Version: &ESVersion{Number: "7.1.1"}}
+		js, err := json.Marshal(meta)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+	})
+}
+
+func (s *Server) ElasticsearchBulk() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.RequestCount++
+
+		contentType := r.Header.Get("Content-type")
+		s.logger.Printf("Received content-type: %v", contentType)
+
+		bodyBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.logger.Printf("Error reading body: %v", err)
+			http.Error(w, "can't read body", http.StatusBadRequest)
+			return
+		}
+
+		body := string(bodyBytes)
+		messages := strings.Split(body, "\n")
+
+		log.Printf("%v", messages)
+
+		w.WriteHeader(http.StatusNoContent)
+		fmt.Fprintln(w, "")
+	})
 }
 
 func (s *Server) Index() http.Handler {
@@ -182,7 +228,8 @@ func NewServer(port string) *Server {
 	server := &Server{address: ":" + port, logger: logger, MessageCount: 0, RequestCount: 0, server: httpServer}
 
 	router.Handle("/", server.Index())
-	router.Handle("/_bulk", server.Index())
+	router.Handle("/elasticsearch", server.ElasticsearchRoot())
+	router.Handle("/elasticsearch/_bulk", server.ElasticsearchRoot())
 	router.Handle("/_health", server.Health())
 
 	return server
