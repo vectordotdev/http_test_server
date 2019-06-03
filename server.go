@@ -182,6 +182,7 @@ func NewServer(port string) *Server {
 	server := &Server{address: ":" + port, logger: logger, MessageCount: 0, RequestCount: 0, server: httpServer}
 
 	router.Handle("/", server.Index())
+	router.Handle("/_bulk", server.Index())
 	router.Handle("/_health", server.Health())
 
 	return server
