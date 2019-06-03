@@ -116,9 +116,13 @@ func (s *Server) Index() http.Handler {
 		messages := []string{}
 
 		switch contentType {
+		// Unfortunately fluentbit does not use the proper content type when sending
+		// new line delimited JSON :(
 		case "application/json":
 			messages = strings.Split(body, "\n")
 		case "application/ndjson":
+			messages = strings.Split(body, "\n")
+		case "text/plain":
 			messages = strings.Split(body, "\n")
 		}
 
