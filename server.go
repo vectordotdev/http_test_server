@@ -25,6 +25,8 @@ var (
 	healthy int32
 )
 
+var summaryPath = "/tmp/http_test_server_summary.json"
+
 type Server struct {
 	address      string
 	file         *os.File
@@ -88,14 +90,12 @@ func (s *Server) WriteSummary() {
 		log.Fatal(err)
 	}
 
-	filePath := "/tmp/http_test_server_summary.json"
-
-	err = ioutil.WriteFile(filePath, sBytes, 0644)
+	err = ioutil.WriteFile(summaryPath, sBytes, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("Wrote activity summary to %s", filePath)
+	log.Printf("Wrote activity summary to %s", summaryPath)
 }
 
 func (s *Server) Index() http.Handler {
@@ -153,6 +153,8 @@ func (s *Server) Health() http.Handler {
 }
 
 func NewServer(port string) *Server {
+	os.Remove(summaryPath)
+
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
 
