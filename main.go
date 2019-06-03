@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 
 	"gopkg.in/urfave/cli.v1"
@@ -16,10 +15,6 @@ func main() {
 			Name:  "port, p",
 			Usage: "The port to bind to",
 		},
-		cli.StringFlag{
-			Name:  "file, f",
-			Usage: "A file to write messages to",
-		},
 	}
 	app.Action = func(ctx *cli.Context) error {
 		port := ctx.String("port")
@@ -30,14 +25,8 @@ func main() {
 			return cli.NewExitError(message, 65)
 		}
 
-		file := ctx.String("file")
-		server := NewServer(port, file)
+		server := NewServer(port)
 		server.Listen()
-
-		if server.File != nil {
-			log.Println("Closing file")
-			server.File.Close()
-		}
 
 		return nil
 	}

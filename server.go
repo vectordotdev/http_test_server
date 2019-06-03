@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -23,30 +27,52 @@ var (
 
 type Server struct {
 	address      string
-	File         *os.File
+	file         *os.File
+	FirstMessage string `json:"first_message"`
+	LastMessage  string `json:"last_message"`
 	logger       *log.Logger
-	RequestCount int64
+	MessageCount int64 `json:"message_count"`
+	RequestCount int64 `json:"request_count"`
 	server       *http.Server
 }
 
 func (s *Server) Listen() {
-	done := make(chan bool)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt)
+	var gracefulStop = make(chan os.Signal)
+	signal.Notify(gracefulStop, syscall.SIGTERM)
+	signal.Notify(gracefulStop, syscall.SIGINT)
 
 	go func() {
-		<-quit
-		s.logger.Println("Server is shutting down...")
-		atomic.StoreInt32(&healthy, 0)
+		sig := <-gracefulStop
+		s.logger.Printf("Caught sig: %+v", sig)
+
+		s.WriteSummary()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		s.server.SetKeepAlivesEnabled(true)
+		s.server.SetKeepAlivesEnabled(false)
 		if err := s.server.Shutdown(ctx); err != nil {
 			s.logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
 		}
-		close(done)
+
+		s.logger.Println("Server stopped")
+		os.Exit(0)
+	}()
+
+	// Print debug output on an interval. This helps with providing insight
+	// into activity without saturating IO.
+	ticker := time.NewTicker(5 * time.Second)
+	quit := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				log.Printf("Received %v messages across %v requests", s.MessageCount, s.RequestCount)
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
 	}()
 
 	s.logger.Println("Server is ready to handle requests at", s.address)
@@ -54,18 +80,83 @@ func (s *Server) Listen() {
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		s.logger.Fatalf("Could not listen on %s: %v\n", s.address, err)
 	}
-
-	<-done
-	s.logger.Println("Server stopped")
 }
 
-func NewServer(port string, filePath string) *Server {
+func (s *Server) WriteSummary() {
+	sBytes, err := json.Marshal(s)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	filePath := "/tmp/http_test_server_summary.json"
+
+	err = ioutil.WriteFile(filePath, sBytes, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Wrote activity summary to %s", filePath)
+}
+
+func (s *Server) Index() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.RequestCount++
+
+		contentType := r.Header.Get("Content-type")
+		s.logger.Printf("Received content-type: %v", contentType)
+
+		bodyBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s.logger.Printf("Error reading body: %v", err)
+			http.Error(w, "can't read body", http.StatusBadRequest)
+			return
+		}
+
+		body := string(bodyBytes)
+		messages := []string{}
+
+		switch contentType {
+		case "application/ndjson":
+			messages = strings.Split(body, "\n")
+		}
+
+		messageCount := len(messages)
+
+		if messageCount > 0 {
+			s.MessageCount = s.MessageCount + int64(messageCount)
+
+			firstMessage := messages[0]
+			lastMessage := messages[messageCount-1]
+
+			if s.FirstMessage == "" && firstMessage != "" {
+				s.FirstMessage = messages[0]
+			}
+
+			if lastMessage != "" {
+				s.LastMessage = lastMessage
+			}
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+		fmt.Fprintln(w, "")
+	})
+}
+
+func (s *Server) Health() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.LoadInt32(&healthy) == 1 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+}
+
+func NewServer(port string) *Server {
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
 
 	router := http.NewServeMux()
-	router.Handle("/", index())
-	router.Handle("/_health", health())
 
 	nextRequestID := func() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
@@ -80,31 +171,12 @@ func NewServer(port string, filePath string) *Server {
 		IdleTimeout:  15 * time.Second,
 	}
 
-	server := &Server{address: ":" + port, logger: logger, server: httpServer, RequestCount: 0}
+	server := &Server{address: ":" + port, logger: logger, MessageCount: 0, RequestCount: 0, server: httpServer}
+
+	router.Handle("/", server.Index())
+	router.Handle("/_health", server.Health())
 
 	return server
-}
-
-func index() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusNoContent)
-		fmt.Fprintln(w, "")
-	})
-}
-
-func health() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.LoadInt32(&healthy) == 1 {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		w.WriteHeader(http.StatusServiceUnavailable)
-	})
 }
 
 func logging(logger *log.Logger) func(http.Handler) http.Handler {
