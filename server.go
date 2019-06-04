@@ -204,7 +204,7 @@ func (s *Server) Health() http.Handler {
 	})
 }
 
-func NewServer(port string) *Server {
+func NewServer(address string) *Server {
 	os.Remove(summaryPath)
 
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
@@ -217,7 +217,7 @@ func NewServer(port string) *Server {
 	}
 
 	httpServer := &http.Server{
-		Addr:         ":" + port,
+		Addr:         address,
 		Handler:      tracing(nextRequestID)(logging(logger)(router)),
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
@@ -225,7 +225,7 @@ func NewServer(port string) *Server {
 		IdleTimeout:  15 * time.Second,
 	}
 
-	server := &Server{address: ":" + port, logger: logger, MessageCount: 0, RequestCount: 0, server: httpServer}
+	server := &Server{address: address, logger: logger, MessageCount: 0, RequestCount: 0, server: httpServer}
 
 	router.Handle("/", server.Index())
 	router.Handle("/elasticsearch", server.ElasticsearchRoot())

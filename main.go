@@ -12,20 +12,20 @@ func main() {
 	app.Usage = "Simple HTTP server that is useful for testing purposes."
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "port, p",
-			Usage: "The port to bind to",
+			Name:  "address, a",
+			Usage: "The address to bind to",
 		},
 	}
 	app.Action = func(ctx *cli.Context) error {
-		port := ctx.String("port")
+		address := ctx.String("address")
 
-		if port == "" {
-			message := "The port argument is required: `http_test_server -p 8080`"
+		if address == "" {
+			message := "The address argument is required: `http_test_server -a 0.0.0.0:8080`"
 			// Exit with 65, EX_DATAERR, to indicate input data was incorrect
 			return cli.NewExitError(message, 65)
 		}
 
-		server := NewServer(port)
+		server := NewServer(address)
 		server.Listen()
 
 		return nil
