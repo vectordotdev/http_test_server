@@ -130,6 +130,8 @@ func (s *Server) Index() http.Handler {
 			messages = strings.Split(body, "\n")
 		case "application/ndjson":
 			messages = strings.Split(body, "\n")
+		case "application/x-ndjson":
+			messages = strings.Split(body, "\n")
 		case "text/plain":
 			messages = strings.Split(body, "\n")
 		}
