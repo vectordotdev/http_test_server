@@ -110,8 +110,9 @@ func (s *Server) Index() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.RequestCount++
 
-		contentType := r.Header.Get("Content-type")
-		s.logger.Printf("Received content-type: %v", contentType)
+		contentType := r.Header.Get("Content-Type")
+		contentLength := r.Header.Get("Content-Length")
+		s.logger.Printf("Received request: content-type: %v, content-length: %v", contentType, contentLength)
 
 		bodyBytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
