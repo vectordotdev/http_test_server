@@ -37,6 +37,7 @@ type ESMeta struct {
 
 type Server struct {
 	address      string
+	ByteTotal    int64 `json:"byte_total"`
 	file         *os.File
 	FirstMessage string `json:"first_message"`
 	LastMessage  string `json:"last_message"`
@@ -121,6 +122,7 @@ func (s *Server) Index() http.Handler {
 			return
 		}
 
+		byteLen := len(bodyBytes)
 		body := string(bodyBytes)
 		messages := []string{}
 
@@ -140,6 +142,7 @@ func (s *Server) Index() http.Handler {
 		messageCount := len(messages)
 
 		if messageCount > 0 {
+			s.ByteTotal = s.ByteTotal + int64(byteLen)
 			s.MessageCount = s.MessageCount + int64(messageCount)
 
 			firstMessage := messages[0]
@@ -190,7 +193,14 @@ func NewServer(address string) *Server {
 		IdleTimeout:  15 * time.Second,
 	}
 
-	server := &Server{address: address, logger: logger, MessageCount: 0, RequestCount: 0, server: httpServer}
+	server := &Server{
+		address:      address,
+		ByteTotal:    0,
+		logger:       logger,
+		MessageCount: 0,
+		RequestCount: 0,
+		server:       httpServer,
+	}
 
 	router.Handle("/", server.Index())
 	router.Handle("/_health", server.Health())
