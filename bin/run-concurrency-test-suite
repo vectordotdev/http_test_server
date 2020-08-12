@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
+
+echo "writing results under ${OUTPUT_DIR}"
+
+while IFS= read -r line; do
+  unset "${!HTTP_TEST_@}" # unset old test variables
+
+  while IFS== read -r key value; do
+    eval "export $key='$value'"
+  done < <(echo "${line}" | jq --raw-output 'to_entries | .[] | .key + "=" + .value ')
+
+  echo "running concurrency test: ${HTTP_TEST_NAME}"
+
+  TEST_OUTPUT_DIR="${OUTPUT_DIR}/${HTTP_TEST_NAME}"
+  mkdir "${TEST_OUTPUT_DIR}"
+
+  OUTPUT_DIR="${TEST_OUTPUT_DIR}" ${DIR}/run-concurrency-test > >(sed "s/^/${HTTP_TEST_NAME}: /")  2> >(sed "s/^/${HTTP_TEST_NAME}: /" >&2)
+done < <(cat "${DIR}/concurrency/suite.json" | jq --raw-output --compact-output '.[]')
+
+echo "wrote results under ${OUTPUT_DIR}"

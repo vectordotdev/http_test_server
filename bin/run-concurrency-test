@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+VECTOR="${VECTOR:-vector}"
+HTTP_TEST_SERVER="${HTTP_TEST_SERVER:-${DIR}/../http_test_server}"
+OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
+TEST_TIME=${TEST_TIME:-60} # how many seconds to run test for
+HTTP_TEST_ADDRESS=${HTTP_TEST_ADDRESS:-localhost:8080}
+
+# Can set:
+#
+# HTTP_TEST_LATENCY_MEAN
+# HTTP_TEST_RATE_LIMIT_BEHAVIOR
+# HTTP_TEST_RATE_LIMIT_BUCKET_CAPACITY
+# HTTP_TEST_RATE_LIMIT_BUCKET_FILL_INTERVAL
+# HTTP_TEST_RATE_LIMIT_BUCKET_QUANTUM
+#
+# See ../README.md for details
+
+echo "writing output files to $OUTPUT_DIR"
+
+export HTTP_TEST_SUMMARY_PATH="${OUTPUT_DIR}/summary.json"
+export HTTP_TEST_PARAMETERS_PATH="${OUTPUT_DIR}/parameters.json"
+export URL="http://${HTTP_TEST_ADDRESS}/"
+
+echo "starting test server"
+timeout ${TEST_TIME} ${HTTP_TEST_SERVER} 2>"${OUTPUT_DIR}/server.err" > "${OUTPUT_DIR}/server.log" &
+
+echo "starting vector"
+timeout --signal KILL ${TEST_TIME} LOG=${LOG:-trace} ${VECTOR} --config "${DIR}/concurrency/vector.toml" 2>"${OUTPUT_DIR}/vector.err" > "${OUTPUT_DIR}/vector.log" &
+
+# uncomment to test with ab
+# sleep 1 && ab -t ${TEST_TIME} -n 10000 -c 100 -m POST "${URL}" &
+
+wait
+
+echo "processing output"
+cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_conurrent_requests_dat.rb > ${OUTPUT_DIR}/concurrent_requests.dat
+
+echo "plotting"
+gnuplot \
+  -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
+  -e "infile='${OUTPUT_DIR}/concurrent_requests.dat'" \
+  -e "outfile='${OUTPUT_DIR}/concurrent_requests.svg'" \
+  ${DIR}/concurrency/concurrent_requests.gpi
+
+echo "wrote files to $OUTPUT_DIR"

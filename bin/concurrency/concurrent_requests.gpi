@@ -1,0 +1,12 @@
+# used by bin/run-concurrency-test
+
+set datafile separator ','
+
+set title sprintf("Active requests\n%s",parameters)
+set xlabel "Offset from start (ms)"
+set ylabel "Number of active requests"
+set grid
+
+set terminal svg size 1000,1000 dynamic
+set output outfile
+plot infile using 1:2 with linespoints

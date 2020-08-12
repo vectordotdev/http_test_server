@@ -1,0 +1,21 @@
+[sources.in]
+  type = "generator"
+  batch_interval = 0.001
+  lines = ["hello"]
+  sequence = true
+
+[sinks.out]
+  type = "http"
+  inputs = ["in"]
+  compression = "none"
+  healthcheck = true
+  uri = "${URL}"
+  encoding.codec = "json"
+
+  request.in_flight_limit = ${VECTOR_REQUEST_IN_FLIGHT_LIMIT:-"auto"}
+
+  buffer.max_events = 1000
+  buffer.type = "memory"
+  buffer.when_full = "drop_newest"
+
+  batch.max_events = 1

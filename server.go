@@ -2,17 +2,17 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
+	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
+
+	"github.com/juju/ratelimit"
 )
 
 type key int
@@ -25,140 +25,187 @@ var (
 	healthy int32
 )
 
-var summaryPath = "/tmp/http_test_server_summary.json"
-
-type ESVersion struct {
-	Number string `json:"number"`
-}
-
-type ESMeta struct {
-	Version *ESVersion `json:"version"`
-}
-
 type Server struct {
-	address      string
-	ByteTotal    int64 `json:"byte_total"`
-	file         *os.File
+	server *http.Server
+	logger *log.Logger
+
+	quit chan (struct{})
+
+	// artificial parameters
+	latency           time.Duration
+	rateLimitBucket   *ratelimit.Bucket
+	rateLimitBehavior RateLimitBehavior
+
+	// TDOO(jesse) consider moving Statistics to handler with channel to avoid
+	// requests blocking each other and to drain on shutdown
+	Statistics *Statistics
+}
+
+type Statistics struct {
+	sync.Mutex
+
+	ByteTotal    int64  `json:"byte_total"`
 	FirstMessage string `json:"first_message"`
 	LastMessage  string `json:"last_message"`
-	logger       *log.Logger
-	MessageCount int64 `json:"message_count"`
-	RequestCount int64 `json:"request_count"`
-	server       *http.Server
+	MessageCount int64  `json:"message_count"`
+	RequestCount int64  `json:"request_count"`
+
+	Requests []*RequestStatistics `json:"requests"`
+}
+type RequestStatistics struct {
+	Start  time.Time `json:"start"`
+	End    time.Time `json:"end"`
+	Status int       `json:"status"`
 }
 
 func (s *Server) Listen() {
-	var gracefulStop = make(chan os.Signal)
-	signal.Notify(gracefulStop, syscall.SIGTERM)
-	signal.Notify(gracefulStop, syscall.SIGINT)
-
-	go func() {
-		sig := <-gracefulStop
-		s.logger.Printf("Caught sig: %+v", sig)
-
-		s.WriteSummary()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		s.server.SetKeepAlivesEnabled(false)
-		if err := s.server.Shutdown(ctx); err != nil {
-			s.logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
-		}
-
-		s.logger.Println("Server stopped")
-		os.Exit(0)
-	}()
-
 	// Print debug output on an interval. This helps with providing insight
 	// into activity without saturating IO.
 	ticker := time.NewTicker(5 * time.Second)
-	quit := make(chan struct{})
+	s.quit = make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				log.Printf("Received %v messages across %v requests", s.MessageCount, s.RequestCount)
-			case <-quit:
+				availableTokens := int64(-1)
+				if s.rateLimitBucket != nil {
+					availableTokens = s.rateLimitBucket.Available()
+				}
+				log.Printf("Received %v messages across %v requests. Tokens available: %d (-1 indicates no rate limit)", s.Statistics.MessageCount, s.Statistics.RequestCount, availableTokens)
+			case <-s.quit:
 				ticker.Stop()
 				return
 			}
 		}
 	}()
 
-	s.logger.Println("Server is ready to handle requests at", s.address)
+	s.logger.Println("Server is ready to handle requests at", s.server.Addr)
 	atomic.StoreInt32(&healthy, 1)
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		s.logger.Fatalf("Could not listen on %s: %v\n", s.address, err)
+		s.logger.Fatalf("Could not listen on %s: %v\n", s.server.Addr, err)
 	}
 }
 
-func (s *Server) WriteSummary() {
-	sBytes, err := json.Marshal(s)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = ioutil.WriteFile(summaryPath, sBytes, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("Wrote activity summary to %s", summaryPath)
+func (s *Server) Shutdown(ctx context.Context) error {
+	close(s.quit)
+	s.server.SetKeepAlivesEnabled(false)
+	return s.server.Shutdown(ctx)
 }
 
 func (s *Server) Index() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.RequestCount++
+		// built up during request handling and statistics recorded at the end via defer
+		handledRequest := &handledRequest{
+			startTime: time.Now(),
+		}
 
-		contentType := r.Header.Get("Content-Type")
-		contentLength := r.Header.Get("Content-Length")
-		s.logger.Printf("Received request: content-type: %v, content-length: %v", contentType, contentLength)
+		defer func() {
+			handledRequest.endTime = time.Now()
 
-		bodyBytes, err := ioutil.ReadAll(r.Body)
+			go func() {
+				s.recordRequest(handledRequest)
+			}()
+		}()
+
+		handledRequest.contentType = r.Header.Get("Content-Type")
+		handledRequest.contentLength = r.Header.Get("Content-Length")
+
+		//
+		// Handle request using test parameters
+		//
+		if bucket := s.rateLimitBucket; bucket != nil {
+			switch s.rateLimitBehavior {
+			case RateLimitBehaviorHard:
+				if bucket.TakeAvailable(1) == 0 {
+					handledRequest.statusCode = http.StatusTooManyRequests
+					w.WriteHeader(http.StatusTooManyRequests)
+					return
+				}
+
+			case RateLimitBehaviorQueue:
+				bucket.Wait(1)
+
+			case RateLimitBehaviorNone:
+
+			default:
+				panic(fmt.Sprintf("unknown rate limit behavior: %s", s.rateLimitBehavior))
+			}
+		}
+		time.Sleep(s.latency)
+
+		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
+			handledRequest.statusCode = http.StatusBadRequest
+
 			s.logger.Printf("Error reading body: %v", err)
 			http.Error(w, "can't read body", http.StatusBadRequest)
 			return
 		}
 
-		byteLen := len(bodyBytes)
-		body := string(bodyBytes)
-		messages := []string{}
-
-		switch contentType {
-		// Unfortunately fluentbit does not use the proper content type when sending
-		// new line delimited JSON :(
-		case "application/json":
-			messages = strings.Split(body, "\n")
-		case "application/ndjson":
-			messages = strings.Split(body, "\n")
-		case "application/x-ndjson":
-			messages = strings.Split(body, "\n")
-		case "text/plain":
-			messages = strings.Split(body, "\n")
-		}
-
-		messageCount := len(messages)
-
-		if messageCount > 0 {
-			s.ByteTotal = s.ByteTotal + int64(byteLen)
-			s.MessageCount = s.MessageCount + int64(messageCount)
-
-			firstMessage := messages[0]
-			lastMessage := messages[messageCount-1]
-
-			if s.FirstMessage == "" && firstMessage != "" {
-				s.FirstMessage = messages[0]
-			}
-
-			if lastMessage != "" {
-				s.LastMessage = lastMessage
-			}
-		}
+		handledRequest.body = body
+		handledRequest.statusCode = http.StatusNoContent
 
 		w.WriteHeader(http.StatusNoContent)
 		fmt.Fprintln(w, "")
+	})
+}
+
+type handledRequest struct {
+	startTime     time.Time
+	endTime       time.Time
+	body          []byte
+	contentType   string
+	contentLength string
+	statusCode    int
+}
+
+func (s *Server) recordRequest(r *handledRequest) {
+	s.logger.Printf("Received request: content-type: %v, content-length: %v", r.contentType, r.contentLength)
+
+	byteLen := len(r.body)
+	body := string(r.body)
+	messages := []string{}
+
+	switch r.contentType {
+	// Unfortunately fluentbit does not use the proper content type when sending
+	// new line delimited JSON :(
+	case "application/json":
+		messages = strings.Split(body, "\n")
+	case "application/ndjson":
+		messages = strings.Split(body, "\n")
+	case "application/x-ndjson":
+		messages = strings.Split(body, "\n")
+	case "text/plain":
+		messages = strings.Split(body, "\n")
+	}
+
+	messageCount := len(messages)
+	firstMessage := ""
+	lastMessage := ""
+	if messageCount > 0 {
+		firstMessage = messages[0]
+		lastMessage = messages[messageCount-1]
+	}
+
+	s.Statistics.Lock()
+	defer s.Statistics.Unlock()
+
+	s.Statistics.RequestCount++
+
+	s.Statistics.ByteTotal += int64(byteLen)
+	s.Statistics.MessageCount += int64(messageCount)
+
+	if s.Statistics.FirstMessage == "" {
+		s.Statistics.FirstMessage = firstMessage
+	}
+	if lastMessage != "" {
+		s.Statistics.LastMessage = lastMessage
+	}
+
+	s.Statistics.Requests = append(s.Statistics.Requests, &RequestStatistics{
+		Start:  r.startTime.UTC(),
+		End:    r.endTime.UTC(),
+		Status: r.statusCode,
 	})
 }
 
@@ -172,9 +219,20 @@ func (s *Server) Health() http.Handler {
 	})
 }
 
-func NewServer(address string) *Server {
-	os.Remove(summaryPath)
+func WithLatency(d time.Duration) func(*Server) {
+	return func(s *Server) {
+		s.latency = d
+	}
+}
 
+func WithRateLimit(behavior RateLimitBehavior, fillInterval time.Duration, capacity, quantum int64) func(*Server) {
+	return func(s *Server) {
+		s.rateLimitBehavior = behavior
+		s.rateLimitBucket = ratelimit.NewBucketWithQuantum(fillInterval, capacity, quantum)
+	}
+}
+
+func NewServer(address string, opts ...func(*Server)) *Server {
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
 
@@ -193,19 +251,23 @@ func NewServer(address string) *Server {
 		IdleTimeout:  15 * time.Second,
 	}
 
-	server := &Server{
-		address:      address,
-		ByteTotal:    0,
-		logger:       logger,
-		MessageCount: 0,
-		RequestCount: 0,
-		server:       httpServer,
+	server := Server{
+		server: httpServer,
+		logger: logger,
+
+		rateLimitBehavior: RateLimitBehaviorNone,
+
+		Statistics: &Statistics{},
+	}
+
+	for _, opt := range opts {
+		opt(&server)
 	}
 
 	router.Handle("/", server.Index())
 	router.Handle("/_health", server.Health())
 
-	return server
+	return &server
 }
 
 func logging(logger *log.Logger) func(http.Handler) http.Handler {
@@ -236,3 +298,16 @@ func tracing(nextRequestID func() string) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+type RateLimitBehavior string
+
+const (
+	// no rate limit
+	RateLimitBehaviorNone RateLimitBehavior = "NONE"
+
+	// returns a 429 when rate is exceeded
+	RateLimitBehaviorHard RateLimitBehavior = "HARD"
+
+	// queues request until there is available capacity
+	RateLimitBehaviorQueue RateLimitBehavior = "QUEUE"
+)
