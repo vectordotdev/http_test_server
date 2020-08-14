@@ -9,4 +9,4 @@ set grid
 
 set terminal svg size 1000,1000 dynamic
 set output outfile
-plot infile using 1:2 with linespoints
+plot infile using 1:2 with points
