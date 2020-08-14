@@ -51,8 +51,10 @@ useful for debugging or further understanding behavior during the test:
 * `vector.log` Vector stdout
 * `vector.err`: Vector stderr
 
-Available environment variables that can be used to test artificial behavior:
+Available environment variables:
 
+* `OUTPUT_DIR`: where to write the test artifacts (defaults to a tmpdir)
+* `VECTOR`: the path to the `vector` binary (defaults to `vector`)
 * `HTTP_TEST_LATENCY_MEAN`: artificial latency
 * `HTTP_TEST_RATE_LIMIT_BEHAVIOR`: the behavior of the rate limiting. Possible
   values: `NONE` (no rate limit; the default), `HARD` (return a HTTP 429 when
