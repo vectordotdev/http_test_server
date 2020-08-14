@@ -37,7 +37,7 @@ echo "starting test server"
 timeout ${TEST_TIME} ${HTTP_TEST_SERVER} 2>"${OUTPUT_DIR}/server.err" > "${OUTPUT_DIR}/server.log" &
 
 echo "starting vector"
-timeout --signal KILL ${TEST_TIME} LOG=${LOG:-trace} ${VECTOR} --config "${DIR}/concurrency/vector.toml" 2>"${OUTPUT_DIR}/vector.err" > "${OUTPUT_DIR}/vector.log" &
+timeout --signal KILL ${TEST_TIME} ${VECTOR} -vv --config "${DIR}/concurrency/vector.toml" 2>"${OUTPUT_DIR}/vector.err" > "${OUTPUT_DIR}/vector.log" &
 
 # uncomment to test with ab
 # sleep 1 && ab -t ${TEST_TIME} -n 10000 -c 100 -m POST "${URL}" &
