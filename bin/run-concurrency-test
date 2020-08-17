@@ -38,7 +38,7 @@ echo "starting test server"
 timeout ${TEST_TIME} ${HTTP_TEST_SERVER} 2>"${OUTPUT_DIR}/server.err" > "${OUTPUT_DIR}/server.log" &
 
 echo "running test command"
-timeout --signal KILL ${TEST_TIME} bash -x -c "${TEST_CMD}" 2>"${OUTPUT_DIR}/test_cmd.err" > "${OUTPUT_DIR}/test_cmd.log" &
+timeout --signal KILL ${TEST_TIME} bash -c "${TEST_CMD}" 2>"${OUTPUT_DIR}/test_cmd.err" > "${OUTPUT_DIR}/test_cmd.log" &
 
 wait
 
