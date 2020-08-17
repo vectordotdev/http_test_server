@@ -43,7 +43,7 @@ timeout --signal KILL ${TEST_TIME} bash -c "${TEST_CMD}" 2>"${OUTPUT_DIR}/test_c
 wait
 
 echo "processing output"
-cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_conurrent_requests_dat.rb > ${OUTPUT_DIR}/concurrent_requests.dat
+cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_concurrent_requests_dat.rb > ${OUTPUT_DIR}/concurrent_requests.dat
 cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_requests_dat.rb > ${OUTPUT_DIR}/requests.dat
 
 echo "plotting"
