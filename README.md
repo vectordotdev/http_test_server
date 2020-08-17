@@ -50,13 +50,17 @@ useful for debugging or further understanding behavior during the test:
 
 * `server.log`: HTTP test server stdout
 * `server.err`: HTTP test server stderr
-* `vector.log` Vector stdout
-* `vector.err`: Vector stderr
+* `test_cmd.log` Test command (typically vector) stdout
+* `test_cmd.err`: Vector (typically vector) stderr
 
 Available environment variables:
 
 * `OUTPUT_DIR`: where to write the test artifacts (defaults to a tmpdir)
 * `VECTOR`: the path to the `vector` binary (defaults to `vector`)
+* `TEST_CMD`: the test command to execute. It can use the `URL` environment
+  variable to configure the command. Defaults to running `$VECTOR` but can be
+  used to run other tools like `ab` (e.g. `TEST_CMD='ab -t ${TEST_TIME} -n 10000
+  -c 100 -m POST ${URL}'`)
 * `HTTP_TEST_LATENCY_MEAN`: artificial latency
 * `HTTP_TEST_RATE_LIMIT_BEHAVIOR`: the behavior of the rate limiting. Possible
   values: `NONE` (no rate limit; the default), `HARD` (return a HTTP 429 when

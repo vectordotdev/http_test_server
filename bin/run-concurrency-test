@@ -12,6 +12,7 @@ done
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 VECTOR="${VECTOR:-vector}"
+TEST_CMD="${TEST_CMD:-"${VECTOR} -vv --config ${DIR}/concurrency/vector.toml"}"
 HTTP_TEST_SERVER="${HTTP_TEST_SERVER:-${DIR}/../http_test_server}"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
 TEST_TIME=${TEST_TIME:-60} # how many seconds to run test for
@@ -36,11 +37,8 @@ export URL="http://${HTTP_TEST_ADDRESS}/"
 echo "starting test server"
 timeout ${TEST_TIME} ${HTTP_TEST_SERVER} 2>"${OUTPUT_DIR}/server.err" > "${OUTPUT_DIR}/server.log" &
 
-echo "starting vector"
-timeout --signal KILL ${TEST_TIME} ${VECTOR} -vv --config "${DIR}/concurrency/vector.toml" 2>"${OUTPUT_DIR}/vector.err" > "${OUTPUT_DIR}/vector.log" &
-
-# uncomment to test with ab
-# sleep 1 && ab -t ${TEST_TIME} -n 10000 -c 100 -m POST "${URL}" &
+echo "running test command"
+timeout --signal KILL ${TEST_TIME} bash -x -c "${TEST_CMD}" 2>"${OUTPUT_DIR}/test_cmd.err" > "${OUTPUT_DIR}/test_cmd.log" &
 
 wait
 
