@@ -92,78 +92,76 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }
 
-func (s *Server) Index() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// built up during request handling and statistics recorded at the end via defer
-		handledRequest := &handledRequest{
-			startTime: time.Now(),
-		}
+func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
+	// built up during request handling and statistics recorded at the end via defer
+	handledRequest := &handledRequest{
+		startTime: time.Now(),
+	}
 
-		defer func() {
-			handledRequest.endTime = time.Now()
+	defer func() {
+		handledRequest.endTime = time.Now()
 
-			go func() {
-				s.recordRequest(handledRequest)
-			}()
+		go func() {
+			s.recordRequest(handledRequest)
 		}()
+	}()
 
-		handledRequest.contentType = r.Header.Get("Content-Type")
-		handledRequest.contentLength = r.Header.Get("Content-Length")
+	handledRequest.contentType = r.Header.Get("Content-Type")
+	handledRequest.contentLength = r.Header.Get("Content-Length")
 
-		//
-		// Handle request using test parameters
-		//
-		if bucket := s.rateLimitBucket; bucket != nil {
-			switch s.rateLimitBehavior {
-			case RateLimitBehaviorClose:
-				if bucket.TakeAvailable(1) == 0 {
-					hj, ok := w.(http.Hijacker)
-					if !ok {
-						panic("connection not hijackable") // should never happen
-					}
-					conn, _, err := hj.Hijack()
-					if err != nil {
-						s.logger.Printf("could not hijack connection: %s", err.Error())
-						http.Error(w, fmt.Sprintf("could not hijack connection: %s", err.Error()), http.StatusInternalServerError)
-						return
-					}
-					conn.Close() // drop connection
+	//
+	// Handle request using test parameters
+	//
+	if bucket := s.rateLimitBucket; bucket != nil {
+		switch s.rateLimitBehavior {
+		case RateLimitBehaviorClose:
+			if bucket.TakeAvailable(1) == 0 {
+				hj, ok := w.(http.Hijacker)
+				if !ok {
+					panic("connection not hijackable") // should never happen
+				}
+				conn, _, err := hj.Hijack()
+				if err != nil {
+					s.logger.Printf("could not hijack connection: %s", err.Error())
+					http.Error(w, fmt.Sprintf("could not hijack connection: %s", err.Error()), http.StatusInternalServerError)
 					return
 				}
-
-			case RateLimitBehaviorHard:
-				if bucket.TakeAvailable(1) == 0 {
-					handledRequest.statusCode = http.StatusTooManyRequests
-					http.Error(w, "too many requests", http.StatusTooManyRequests)
-					return
-				}
-
-			case RateLimitBehaviorQueue:
-				bucket.Wait(1)
-
-			case RateLimitBehaviorNone:
-
-			default:
-				panic(fmt.Sprintf("unknown rate limit behavior: %s", s.rateLimitBehavior))
+				conn.Close() // drop connection
+				return
 			}
+
+		case RateLimitBehaviorHard:
+			if bucket.TakeAvailable(1) == 0 {
+				handledRequest.statusCode = http.StatusTooManyRequests
+				http.Error(w, "too many requests", http.StatusTooManyRequests)
+				return
+			}
+
+		case RateLimitBehaviorQueue:
+			bucket.Wait(1)
+
+		case RateLimitBehaviorNone:
+
+		default:
+			panic(fmt.Sprintf("unknown rate limit behavior: %s", s.rateLimitBehavior))
 		}
-		time.Sleep(s.latency)
+	}
+	time.Sleep(s.latency)
 
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			handledRequest.statusCode = http.StatusBadRequest
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		handledRequest.statusCode = http.StatusBadRequest
 
-			s.logger.Printf("Error reading body: %v", err)
-			http.Error(w, "can't read body", http.StatusBadRequest)
-			return
-		}
+		s.logger.Printf("Error reading body: %v", err)
+		http.Error(w, "can't read body", http.StatusBadRequest)
+		return
+	}
 
-		handledRequest.body = body
-		handledRequest.statusCode = http.StatusNoContent
+	handledRequest.body = body
+	handledRequest.statusCode = http.StatusNoContent
 
-		w.WriteHeader(http.StatusNoContent)
-		fmt.Fprintln(w, "")
-	})
+	w.WriteHeader(http.StatusNoContent)
+	fmt.Fprintln(w, "")
 }
 
 type handledRequest struct {
@@ -225,14 +223,12 @@ func (s *Server) recordRequest(r *handledRequest) {
 	})
 }
 
-func (s *Server) Health() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.LoadInt32(&healthy) == 1 {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		w.WriteHeader(http.StatusServiceUnavailable)
-	})
+func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
+	if atomic.LoadInt32(&healthy) == 1 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
 }
 
 func WithLatency(d time.Duration) func(*Server) {
@@ -280,8 +276,8 @@ func NewServer(address string, opts ...func(*Server)) *Server {
 		opt(&server)
 	}
 
-	router.Handle("/", server.Index())
-	router.Handle("/_health", server.Health())
+	router.HandleFunc("/", server.Index)
+	router.HandleFunc("/_health", server.Health)
 
 	return &server
 }
