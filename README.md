@@ -27,10 +27,11 @@ a concurrency test using vector and analyzing the results.
 To run a single test, you can run:
 
 ```bash
-$ HTTP_TEST_LATENCY_MEAN=200ms TEST_TIME=60 ./bin/run-concurrency-test
+$ HTTP_TEST_LATENCY_NORMAL_MEAN=200ms HTTP_TEST_LATENCY_NORMAL_STDDEV=50ms TEST_TIME=60 ./bin/run-concurrency-test
 ```
 
-This will run a 60s test of vector using an artificial latency of 200ms.
+This will run a 60s test of vector using an artificial latency of a mean of
+200ms and standard deviation of 50ms.
 
 It will output the directory to which it will write the test artifacts
 (controllable via `$OUTPUT_DIR`).
@@ -65,11 +66,18 @@ Available environment variables:
   variable to configure the command. Defaults to running `$VECTOR` but can be
   used to run other tools like `ab` (e.g. `TEST_CMD='ab -t ${TEST_TIME} -n 10000
   -c 100 -m POST ${URL}'`)
-* `HTTP_TEST_LATENCY_MEAN`: artificial latency
+* `HTTP_TEST_LATENCY_DISTRIBUTION`: artificial latency distribution; only
+  `NORMAL` is currently supported (the default)
+* `HTTP_TEST_LATENCY_NORMAL_MEAN`: artificial latency mean for the `NORMAL`
+  distribution
+* `HTTP_TEST_LATENCY_NORMAL_STDDEV`: artificial latency standard devation for
+  the `NORMAL` distribution
 * `HTTP_TEST_RATE_LIMIT_BEHAVIOR`: the behavior of the rate limiting. Possible
   values: `NONE` (no rate limit; the default); `HARD` (return a HTTP 429 when
   limit is hit); `CLOSE` (close the connection without response when limit is
   hit); and `QUEUE` (queue the request until there is available capacity).
+* `HTTP_TEST_RATE_LIMIT_HARD_STATUS_CODE`: the status code to return if
+  `HTTP_TEST_RATE_LIMIT_BEHAVIOR` is `HARD` (defaults to 429)
 * `HTTP_TEST_RATE_LIMIT_BUCKET_CAPACITY`: The maximum number of rate limit
   tokens
 * `HTTP_TEST_RATE_LIMIT_BUCKET_QUANTUM`: the number of tokens to add per fill

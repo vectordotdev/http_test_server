@@ -125,7 +125,7 @@ func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 
 	serverOptions := ServerOptions{
 		RateLimiter: &RateLimiterNone{},
-		Latency:     NewLatencyMiddlewareStatic(time.Duration(0)),
+		Latency:     NewLatencyMiddlewareNormal(time.Duration(0), time.Duration(0)),
 	}
 
 	for _, opt := range opts {

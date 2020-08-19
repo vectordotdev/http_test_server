@@ -1,23 +1,33 @@
 package main
 
 import (
+	"math/rand"
 	"net/http"
 	"time"
 )
 
-type LatencyMiddlewareStatic struct {
-	latency time.Duration
+type LatencyMiddlewareNormal struct {
+	mean   time.Duration
+	stddev time.Duration
 }
 
-func NewLatencyMiddlewareStatic(latency time.Duration) *LatencyMiddlewareStatic {
-	return &LatencyMiddlewareStatic{
-		latency: latency,
+func NewLatencyMiddlewareNormal(mean time.Duration, stddev time.Duration) *LatencyMiddlewareNormal {
+	return &LatencyMiddlewareNormal{
+		mean:   mean,
+		stddev: stddev,
 	}
 }
 
-func (lm *LatencyMiddlewareStatic) WrapHTTP(next http.Handler) http.Handler {
+func (lm *LatencyMiddlewareNormal) WrapHTTP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		time.Sleep(lm.latency)
+		d := time.Duration(rand.NormFloat64())*lm.stddev + lm.mean
+		time.Sleep(d)
 		next.ServeHTTP(rw, r)
 	})
 }
+
+type LatencyDistribution string
+
+const (
+	LatencyDistributionNormal = LatencyDistribution("NORMAL")
+)

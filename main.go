@@ -18,13 +18,15 @@ import (
 )
 
 type parameters struct {
-	LatencyMean *string `json:"latency_mean"`
+	LatencyDistribution                        string  `json:"latency_distribution"`
+	LatencyDistributionNormalMean              *string `json:"latency_distribution_normal_mean,omitempty"`
+	LatencyDistributionNormalStandardDeviation *string `json:"latency_distribution_normal_standard_deviation,omitempty"`
 
-	RateLimitBehavior           *string `json:"rate_limit_behavior"`
-	RateLimitBucketFillInterval *string `json:"rate_limit_bucket_fill_interval"`
-	RateLimitBucketCapacity     *int64  `json:"rate_limit_bucket_capaticy"`
-	RateLimitBucketQuauntum     *int64  `json:"rate_limit_bucket_quantum"`
-	RateLimitHardStatusCode     *int    `json:"rate_limit_hard_status_code"`
+	RateLimitBehavior           string  `json:"rate_limit_behavior"`
+	RateLimitBucketFillInterval *string `json:"rate_limit_bucket_fill_interval,omitempty"`
+	RateLimitBucketCapacity     *int64  `json:"rate_limit_bucket_capaticy,omitempty"`
+	RateLimitBucketQuauntum     *int64  `json:"rate_limit_bucket_quantum,omitempty"`
+	RateLimitHardStatusCode     *int    `json:"rate_limit_hard_status_code,omitempty"`
 }
 
 var rootCmd = &cobra.Command{
@@ -41,13 +43,27 @@ var rootCmd = &cobra.Command{
 
 		parameters := &parameters{}
 
-		if latency := viper.GetDuration("latency-mean"); latency > 0 {
-			s := latency.String()
-			parameters.LatencyMean = &s
-			opts = append(opts, WithLatency(NewLatencyMiddlewareStatic(latency)))
+		latencyDistribution := viper.GetString("latency-distribution")
+		parameters.LatencyDistribution = latencyDistribution
+		switch latencyDistribution {
+		case "NORMAL":
+			mean := viper.GetDuration("latency-normal-mean")
+			stddev := viper.GetDuration("latency-normal-stddev")
+			parameters.LatencyDistributionNormalMean = func() *string {
+				s := mean.String()
+				return &s
+			}()
+			parameters.LatencyDistributionNormalStandardDeviation = func() *string {
+				s := stddev.String()
+				return &s
+			}()
+			opts = append(opts, WithLatency(NewLatencyMiddlewareNormal(mean, stddev)))
+		default:
+			return fmt.Errorf("unknown latency-distribution value: %s", latencyDistribution)
 		}
 
-		if behavior := viper.GetString("rate-limit-behavior"); behavior != "NONE" {
+		behavior := viper.GetString("rate-limit-behavior")
+		if behavior != "NONE" {
 			var (
 				fillInterval = viper.GetDuration("rate-limit-bucket-fill-interval")
 				capacity     = viper.GetInt64("rate-limit-bucket-capacity")
@@ -78,7 +94,6 @@ var rootCmd = &cobra.Command{
 				return fmt.Errorf("unknown rate-limit-behavior value: %s", behavior)
 			}
 
-			parameters.RateLimitBehavior = &behavior
 			parameters.RateLimitBucketFillInterval = func() *string {
 				s := fillInterval.String()
 				return &s
@@ -88,6 +103,8 @@ var rootCmd = &cobra.Command{
 
 			opts = append(opts, WithRateLimiter(rateLimiter))
 		}
+
+		parameters.RateLimitBehavior = behavior
 
 		if parametersPath != "" {
 			b, err := json.Marshal(parameters)
@@ -150,8 +167,9 @@ var rootCmd = &cobra.Command{
 func main() {
 	rootCmd.PersistentFlags().StringP("address", "a", "0.0.0.0:8080", "the address to bind to")
 
-	// TODO(jesse) add variance parameter(s)
-	rootCmd.PersistentFlags().DurationP("latency-mean", "l", 0, "artificial latency to inject (default: 0)")
+	rootCmd.PersistentFlags().StringP("latency-distribution", "l", "NORMAL", "distribution of artificial latency\nOne of [NORMAL]")
+	rootCmd.PersistentFlags().DurationP("latency-normal-mean", "m", 0, "artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
+	rootCmd.PersistentFlags().DurationP("latency-normal-stddev", "S", 0, "standard deviation of artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
 
 	rootCmd.PersistentFlags().StringP("summary-path", "s", "/tmp/http_test_server_summary.json", "file to write out statistics summary to")
 	rootCmd.PersistentFlags().StringP("parameters-path", "p", "", "file to write out test parameters to")
@@ -160,7 +178,7 @@ func main() {
 	rootCmd.PersistentFlags().UintP("rate-limit-bucket-quantum", "q", 0, "rate limit token bucket quantum (tokens added per interval) (default: 0)")
 	rootCmd.PersistentFlags().DurationP("rate-limit-bucket-fill-interval", "d", 0, "interval to refill quantum number of tokens (default: 0)")
 	rootCmd.PersistentFlags().StringP("rate-limit-behavior", "b", "NONE", "behavior of rate limiter\nOne of [HARD, QUEUE, CLOSE, NONE].\nHARD returns 429s when limit is hit.\nQUEUE queues the request.\nCLOSE terminates the connection early\nNONE applies no limit.")
-	rootCmd.PersistentFlags().Int("rate-limit-hard-status-code", http.StatusTooManyRequests, "status code to return for rate limit if behavior is HARD")
+	rootCmd.PersistentFlags().Int("rate-limit-hard-status-code", http.StatusTooManyRequests, "status code to return for rate limit; only applies if rate-limit-behavior is HARD")
 
 	viper.BindPFlags(rootCmd.PersistentFlags())
 
