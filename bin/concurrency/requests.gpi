@@ -8,6 +8,7 @@ set ylabel "Requests"
 set grid
 
 set yrange [0:]
+set xtics 1000
 unset key
 
 set style arrow 1 heads back nofilled linecolor rgb "black"  linewidth 1 dashtype solid size screen  0.008,90.000,90.00

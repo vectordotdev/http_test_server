@@ -6,6 +6,8 @@ set title sprintf("Active requests\n%s",parameters)
 set xlabel "Offset from start (ms)"
 set ylabel "Number of active requests"
 set grid
+set xtics 1000
+unset key
 
 # noenhanced: underscores causing subscript in title
 set terminal svg noenhanced size 1000,1000 dynamic
