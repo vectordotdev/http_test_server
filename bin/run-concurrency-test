@@ -48,12 +48,14 @@ cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_requests_dat.rb > 
 
 echo "plotting"
 gnuplot \
+  -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
   -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
   -e "infile='${OUTPUT_DIR}/concurrent_requests.dat'" \
   -e "outfile='${OUTPUT_DIR}/concurrent_requests.svg'" \
   ${DIR}/concurrency/concurrent_requests.gpi
 
 gnuplot \
+  -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
   -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
   -e "infile='${OUTPUT_DIR}/requests.dat'" \
   -e "outfile='${OUTPUT_DIR}/requests.svg'" \

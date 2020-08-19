@@ -2,7 +2,7 @@
 
 set datafile separator ','
 
-set title sprintf("Active requests\n%s",parameters)
+set title sprintf("test: %s\nactive requests\n%s", test_name, parameters)
 set xlabel "Offset from start (ms)"
 set ylabel "Number of active requests"
 set grid
