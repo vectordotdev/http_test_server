@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,10 +20,11 @@ import (
 type parameters struct {
 	LatencyMean *string `json:"latency_mean"`
 
-	RateLimitBehavior           *RateLimitBehavior `json:"rate_limit_behavior"`
-	RateLimitBucketFillInterval *string            `json:"rate_limit_bucket_fill_interval"`
-	RateLimitBucketCapacity     *int64             `json:"rate_limit_bucket_capaticy"`
-	RateLimitBucketQuauntum     *int64             `json:"rate_limit_bucket_quantum"`
+	RateLimitBehavior           *string `json:"rate_limit_behavior"`
+	RateLimitBucketFillInterval *string `json:"rate_limit_bucket_fill_interval"`
+	RateLimitBucketCapacity     *int64  `json:"rate_limit_bucket_capaticy"`
+	RateLimitBucketQuauntum     *int64  `json:"rate_limit_bucket_quantum"`
+	RateLimitHardStatusCode     *int    `json:"rate_limit_hard_status_code"`
 }
 
 var rootCmd = &cobra.Command{
@@ -35,25 +37,17 @@ var rootCmd = &cobra.Command{
 
 		parametersPath := viper.GetString("parameters-path")
 
-		opts := []func(*Server){}
+		opts := []func(*ServerOptions){}
 
 		parameters := &parameters{}
 
 		if latency := viper.GetDuration("latency-mean"); latency > 0 {
 			s := latency.String()
 			parameters.LatencyMean = &s
-			opts = append(opts, WithLatency(latency))
+			opts = append(opts, WithLatency(NewLatencyMiddlewareStatic(latency)))
 		}
 
 		if behavior := viper.GetString("rate-limit-behavior"); behavior != "NONE" {
-			var rateLimitBehavior RateLimitBehavior
-			switch behavior {
-			case "HARD", "QUEUE", "CLOSE":
-				rateLimitBehavior = RateLimitBehavior(behavior)
-			default:
-				return fmt.Errorf("unknown rate-limit-behavior value: %s", behavior)
-			}
-
 			var (
 				fillInterval = viper.GetDuration("rate-limit-bucket-fill-interval")
 				capacity     = viper.GetInt64("rate-limit-bucket-capacity")
@@ -70,7 +64,21 @@ var rootCmd = &cobra.Command{
 				return fmt.Errorf("--rate-limit-bucket-quantum must be > 0 if --rate-limit-behavior is set to not NONE")
 			}
 
-			parameters.RateLimitBehavior = &rateLimitBehavior
+			var rateLimiter RateLimiter
+			switch behavior {
+			case "HARD":
+				code := viper.GetInt("rate-limit-hard-status-code")
+				rateLimiter = NewRateLimiterHard(fillInterval, capacity, quantum, code)
+				parameters.RateLimitHardStatusCode = &code
+			case "QUEUE":
+				rateLimiter = NewRateLimiterQueue(fillInterval, capacity, quantum)
+			case "CLOSE":
+				rateLimiter = NewRateLimiterClose(fillInterval, capacity, quantum)
+			default:
+				return fmt.Errorf("unknown rate-limit-behavior value: %s", behavior)
+			}
+
+			parameters.RateLimitBehavior = &behavior
 			parameters.RateLimitBucketFillInterval = func() *string {
 				s := fillInterval.String()
 				return &s
@@ -78,7 +86,7 @@ var rootCmd = &cobra.Command{
 			parameters.RateLimitBucketCapacity = &capacity
 			parameters.RateLimitBucketQuauntum = &quantum
 
-			opts = append(opts, WithRateLimit(rateLimitBehavior, fillInterval, capacity, quantum))
+			opts = append(opts, WithRateLimiter(rateLimiter))
 		}
 
 		if parametersPath != "" {
@@ -114,7 +122,7 @@ var rootCmd = &cobra.Command{
 				return
 			}
 
-			sBytes, err := json.Marshal(server.Statistics)
+			sBytes, err := json.Marshal(server.Statistics())
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -152,6 +160,7 @@ func main() {
 	rootCmd.PersistentFlags().UintP("rate-limit-bucket-quantum", "q", 0, "rate limit token bucket quantum (tokens added per interval) (default: 0)")
 	rootCmd.PersistentFlags().DurationP("rate-limit-bucket-fill-interval", "d", 0, "interval to refill quantum number of tokens (default: 0)")
 	rootCmd.PersistentFlags().StringP("rate-limit-behavior", "b", "NONE", "behavior of rate limiter\nOne of [HARD, QUEUE, CLOSE, NONE].\nHARD returns 429s when limit is hit.\nQUEUE queues the request.\nCLOSE terminates the connection early\nNONE applies no limit.")
+	rootCmd.PersistentFlags().Int("rate-limit-hard-status-code", http.StatusTooManyRequests, "status code to return for rate limit if behavior is HARD")
 
 	viper.BindPFlags(rootCmd.PersistentFlags())
 

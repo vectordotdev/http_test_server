@@ -3,16 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/juju/ratelimit"
 )
 
 type key int
@@ -25,37 +20,22 @@ var (
 	healthy int32
 )
 
+type ServerOptions struct {
+	RateLimiter Middleware
+	Latency     Middleware
+}
+
 type Server struct {
 	server *http.Server
 	logger *log.Logger
 
 	quit chan (struct{})
 
-	// artificial parameters
-	latency           time.Duration
-	rateLimitBucket   *ratelimit.Bucket
-	rateLimitBehavior RateLimitBehavior
-
-	// TDOO(jesse) consider moving Statistics to handler with channel to avoid
-	// requests blocking each other and to drain on shutdown
-	Statistics *Statistics
+	statisticsMiddleware *statisticsMiddleware
 }
 
-type Statistics struct {
-	sync.Mutex
-
-	ByteTotal    int64  `json:"byte_total"`
-	FirstMessage string `json:"first_message"`
-	LastMessage  string `json:"last_message"`
-	MessageCount int64  `json:"message_count"`
-	RequestCount int64  `json:"request_count"`
-
-	Requests []*RequestStatistics `json:"requests"`
-}
-type RequestStatistics struct {
-	Start  time.Time `json:"start"`
-	End    time.Time `json:"end"`
-	Status int       `json:"status"`
+type Middleware interface {
+	WrapHTTP(http.Handler) http.Handler
 }
 
 func (s *Server) Listen() {
@@ -67,11 +47,7 @@ func (s *Server) Listen() {
 		for {
 			select {
 			case <-ticker.C:
-				availableTokens := int64(-1)
-				if s.rateLimitBucket != nil {
-					availableTokens = s.rateLimitBucket.Available()
-				}
-				log.Printf("Received %v messages across %v requests. Tokens available: %d (-1 indicates no rate limit)", s.Statistics.MessageCount, s.Statistics.RequestCount, availableTokens)
+				log.Printf("Received %v messages across %v requests", s.statisticsMiddleware.MessageCount(), s.statisticsMiddleware.RequestCount())
 			case <-s.quit:
 				ticker.Stop()
 				return
@@ -86,6 +62,10 @@ func (s *Server) Listen() {
 	}
 }
 
+func (s *Server) Statistics() Statistics {
+	return s.statisticsMiddleware.Statistics()
+}
+
 func (s *Server) Shutdown(ctx context.Context) error {
 	close(s.quit)
 	s.server.SetKeepAlivesEnabled(false)
@@ -93,134 +73,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
-	// built up during request handling and statistics recorded at the end via defer
-	handledRequest := &handledRequest{
-		startTime: time.Now(),
-	}
-
-	defer func() {
-		handledRequest.endTime = time.Now()
-
-		go func() {
-			s.recordRequest(handledRequest)
-		}()
-	}()
-
-	handledRequest.contentType = r.Header.Get("Content-Type")
-	handledRequest.contentLength = r.Header.Get("Content-Length")
-
-	//
-	// Handle request using test parameters
-	//
-	if bucket := s.rateLimitBucket; bucket != nil {
-		switch s.rateLimitBehavior {
-		case RateLimitBehaviorClose:
-			if bucket.TakeAvailable(1) == 0 {
-				hj, ok := w.(http.Hijacker)
-				if !ok {
-					panic("connection not hijackable") // should never happen
-				}
-				conn, _, err := hj.Hijack()
-				if err != nil {
-					s.logger.Printf("could not hijack connection: %s", err.Error())
-					http.Error(w, fmt.Sprintf("could not hijack connection: %s", err.Error()), http.StatusInternalServerError)
-					return
-				}
-				conn.Close() // drop connection
-				return
-			}
-
-		case RateLimitBehaviorHard:
-			if bucket.TakeAvailable(1) == 0 {
-				handledRequest.statusCode = http.StatusTooManyRequests
-				http.Error(w, "too many requests", http.StatusTooManyRequests)
-				return
-			}
-
-		case RateLimitBehaviorQueue:
-			bucket.Wait(1)
-
-		case RateLimitBehaviorNone:
-
-		default:
-			panic(fmt.Sprintf("unknown rate limit behavior: %s", s.rateLimitBehavior))
-		}
-	}
-	time.Sleep(s.latency)
-
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		handledRequest.statusCode = http.StatusBadRequest
-
-		s.logger.Printf("Error reading body: %v", err)
-		http.Error(w, "can't read body", http.StatusBadRequest)
-		return
-	}
-
-	handledRequest.body = body
-	handledRequest.statusCode = http.StatusNoContent
-
 	w.WriteHeader(http.StatusNoContent)
 	fmt.Fprintln(w, "")
-}
-
-type handledRequest struct {
-	startTime     time.Time
-	endTime       time.Time
-	body          []byte
-	contentType   string
-	contentLength string
-	statusCode    int
-}
-
-func (s *Server) recordRequest(r *handledRequest) {
-	s.logger.Printf("Received request: content-type: %v, content-length: %v", r.contentType, r.contentLength)
-
-	byteLen := len(r.body)
-	body := string(r.body)
-	messages := []string{}
-
-	switch r.contentType {
-	// Unfortunately fluentbit does not use the proper content type when sending
-	// new line delimited JSON :(
-	case "application/json":
-		messages = strings.Split(body, "\n")
-	case "application/ndjson":
-		messages = strings.Split(body, "\n")
-	case "application/x-ndjson":
-		messages = strings.Split(body, "\n")
-	case "text/plain":
-		messages = strings.Split(body, "\n")
-	}
-
-	messageCount := len(messages)
-	firstMessage := ""
-	lastMessage := ""
-	if messageCount > 0 {
-		firstMessage = messages[0]
-		lastMessage = messages[messageCount-1]
-	}
-
-	s.Statistics.Lock()
-	defer s.Statistics.Unlock()
-
-	s.Statistics.RequestCount++
-
-	s.Statistics.ByteTotal += int64(byteLen)
-	s.Statistics.MessageCount += int64(messageCount)
-
-	if s.Statistics.FirstMessage == "" {
-		s.Statistics.FirstMessage = firstMessage
-	}
-	if lastMessage != "" {
-		s.Statistics.LastMessage = lastMessage
-	}
-
-	s.Statistics.Requests = append(s.Statistics.Requests, &RequestStatistics{
-		Start:  r.startTime.UTC(),
-		End:    r.endTime.UTC(),
-		Status: r.statusCode,
-	})
 }
 
 func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
@@ -231,20 +85,19 @@ func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusServiceUnavailable)
 }
 
-func WithLatency(d time.Duration) func(*Server) {
-	return func(s *Server) {
-		s.latency = d
+func WithLatency(latency Middleware) func(*ServerOptions) {
+	return func(s *ServerOptions) {
+		s.Latency = latency
 	}
 }
 
-func WithRateLimit(behavior RateLimitBehavior, fillInterval time.Duration, capacity, quantum int64) func(*Server) {
-	return func(s *Server) {
-		s.rateLimitBehavior = behavior
-		s.rateLimitBucket = ratelimit.NewBucketWithQuantum(fillInterval, capacity, quantum)
+func WithRateLimiter(limiter Middleware) func(*ServerOptions) {
+	return func(s *ServerOptions) {
+		s.RateLimiter = limiter
 	}
 }
 
-func NewServer(address string, opts ...func(*Server)) *Server {
+func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
 
@@ -267,16 +120,24 @@ func NewServer(address string, opts ...func(*Server)) *Server {
 		server: httpServer,
 		logger: logger,
 
-		rateLimitBehavior: RateLimitBehaviorNone,
+		statisticsMiddleware: newStatisticsMiddleware(),
+	}
 
-		Statistics: &Statistics{},
+	serverOptions := ServerOptions{
+		RateLimiter: &RateLimiterNone{},
+		Latency:     NewLatencyMiddlewareStatic(time.Duration(0)),
 	}
 
 	for _, opt := range opts {
-		opt(&server)
+		opt(&serverOptions)
 	}
 
-	router.HandleFunc("/", server.Index)
+	var indexHandler http.Handler = http.HandlerFunc(server.Index)
+	indexHandler = serverOptions.Latency.WrapHTTP(indexHandler)
+	indexHandler = serverOptions.RateLimiter.WrapHTTP(indexHandler)
+	indexHandler = server.statisticsMiddleware.WrapHTTP(indexHandler)
+	router.Handle("/", indexHandler)
+
 	router.HandleFunc("/_health", server.Health)
 
 	return &server
@@ -310,19 +171,3 @@ func tracing(nextRequestID func() string) func(http.Handler) http.Handler {
 		})
 	}
 }
-
-type RateLimitBehavior string
-
-const (
-	// no rate limit
-	RateLimitBehaviorNone RateLimitBehavior = "NONE"
-
-	// returns a 429 when rate is exceeded
-	RateLimitBehaviorHard RateLimitBehavior = "HARD"
-
-	// closes the connection if the rate is exceeded
-	RateLimitBehaviorClose RateLimitBehavior = "CLOSE"
-
-	// queues request until there is available capacity
-	RateLimitBehaviorQueue RateLimitBehavior = "QUEUE"
-)
