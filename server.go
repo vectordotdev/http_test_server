@@ -115,10 +115,26 @@ func (s *Server) Index() http.Handler {
 		//
 		if bucket := s.rateLimitBucket; bucket != nil {
 			switch s.rateLimitBehavior {
+			case RateLimitBehaviorClose:
+				if bucket.TakeAvailable(1) == 0 {
+					hj, ok := w.(http.Hijacker)
+					if !ok {
+						panic("connection not hijackable") // should never happen
+					}
+					conn, _, err := hj.Hijack()
+					if err != nil {
+						s.logger.Printf("could not hijack connection: %s", err.Error())
+						http.Error(w, fmt.Sprintf("could not hijack connection: %s", err.Error()), http.StatusInternalServerError)
+						return
+					}
+					conn.Close() // drop connection
+					return
+				}
+
 			case RateLimitBehaviorHard:
 				if bucket.TakeAvailable(1) == 0 {
 					handledRequest.statusCode = http.StatusTooManyRequests
-					w.WriteHeader(http.StatusTooManyRequests)
+					http.Error(w, "too many requests", http.StatusTooManyRequests)
 					return
 				}
 
@@ -307,6 +323,9 @@ const (
 
 	// returns a 429 when rate is exceeded
 	RateLimitBehaviorHard RateLimitBehavior = "HARD"
+
+	// closes the connection if the rate is exceeded
+	RateLimitBehaviorClose RateLimitBehavior = "CLOSE"
 
 	// queues request until there is available capacity
 	RateLimitBehaviorQueue RateLimitBehavior = "QUEUE"

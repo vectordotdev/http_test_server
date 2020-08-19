@@ -67,9 +67,9 @@ Available environment variables:
   -c 100 -m POST ${URL}'`)
 * `HTTP_TEST_LATENCY_MEAN`: artificial latency
 * `HTTP_TEST_RATE_LIMIT_BEHAVIOR`: the behavior of the rate limiting. Possible
-  values: `NONE` (no rate limit; the default), `HARD` (return a HTTP 429 when
-  limit is hit) and `QUEUE` (queue the request until there is available
-  capacity).
+  values: `NONE` (no rate limit; the default); `HARD` (return a HTTP 429 when
+  limit is hit); `CLOSE` (close the connection without response when limit is
+  hit); and `QUEUE` (queue the request until there is available capacity).
 * `HTTP_TEST_RATE_LIMIT_BUCKET_CAPACITY`: The maximum number of rate limit
   tokens
 * `HTTP_TEST_RATE_LIMIT_BUCKET_QUANTUM`: the number of tokens to add per fill

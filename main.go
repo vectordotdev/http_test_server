@@ -48,7 +48,7 @@ var rootCmd = &cobra.Command{
 		if behavior := viper.GetString("rate-limit-behavior"); behavior != "NONE" {
 			var rateLimitBehavior RateLimitBehavior
 			switch behavior {
-			case "HARD", "QUEUE":
+			case "HARD", "QUEUE", "CLOSE":
 				rateLimitBehavior = RateLimitBehavior(behavior)
 			default:
 				return fmt.Errorf("unknown rate-limit-behavior value: %s", behavior)
@@ -151,7 +151,7 @@ func main() {
 	rootCmd.PersistentFlags().UintP("rate-limit-bucket-capacity", "c", 0, "rate limit token bucket capacity (max tokens) (default: 0)")
 	rootCmd.PersistentFlags().UintP("rate-limit-bucket-quantum", "q", 0, "rate limit token bucket quantum (tokens added per interval) (default: 0)")
 	rootCmd.PersistentFlags().DurationP("rate-limit-bucket-fill-interval", "d", 0, "interval to refill quantum number of tokens (default: 0)")
-	rootCmd.PersistentFlags().StringP("rate-limit-behavior", "b", "NONE", "behavior of rate limiter\nOne of [HARD, QUEUE, NONE].\nHARD returns 429s when limit is hit.\nQUEUE queues the request.\nNONE applies no limit.")
+	rootCmd.PersistentFlags().StringP("rate-limit-behavior", "b", "NONE", "behavior of rate limiter\nOne of [HARD, QUEUE, CLOSE, NONE].\nHARD returns 429s when limit is hit.\nQUEUE queues the request.\nCLOSE terminates the connection early\nNONE applies no limit.")
 
 	viper.BindPFlags(rootCmd.PersistentFlags())
 
