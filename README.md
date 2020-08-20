@@ -40,12 +40,10 @@ The artifacts will include:
 
 * `concurrent_requests.dat`: a gnuplot dat file with the concurrent requests at
   every 100ms interval
-* `concurrent_requests.svg`: a plot of the concurrent requests at each 100ms
-* `concurrent_requests.png`: the same plot as a png to ease uploading to Github
-  which doesn't support svgs
 * `requests.dat`: a gnuplot dat file with the request intervals
-* `requests.svg`: a plot of the request intervals
-* `requests.png`: the same plot as a png to ease uploading to Github
+* `request_rate.dat`: a gnuplot dat file with per second request rate
+* `plot.svg`: a plot of the test output
+* `plot.png`: the same plot as a png to ease uploading to Github
   which doesn't support svgs
 * `parameters.json`: the test paramaters
 * `summary.json`: the test result including each request
