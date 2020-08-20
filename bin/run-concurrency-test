@@ -51,26 +51,12 @@ echo "plotting"
 gnuplot \
   -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
   -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
-  -e "infile='${OUTPUT_DIR}/concurrent_requests.dat'" \
-  -e "outfile='${OUTPUT_DIR}/concurrent_requests.svg'" \
-  ${DIR}/concurrency/concurrent_requests.gpi
+  -e "infile_active='${OUTPUT_DIR}/concurrent_requests.dat'" \
+  -e "infile_rate='${OUTPUT_DIR}/request_rate.dat'" \
+  -e "infile_lifetime='${OUTPUT_DIR}/requests.dat'" \
+  -e "outfile='${OUTPUT_DIR}/plot.svg'" \
+  ${DIR}/concurrency/plot.gpi
 
-gnuplot \
-  -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
-  -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
-  -e "infile='${OUTPUT_DIR}/requests.dat'" \
-  -e "outfile='${OUTPUT_DIR}/requests.svg'" \
-  ${DIR}/concurrency/requests.gpi
-
-gnuplot \
-  -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
-  -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
-  -e "infile='${OUTPUT_DIR}/request_rate.dat'" \
-  -e "outfile='${OUTPUT_DIR}/request_rate.svg'" \
-  ${DIR}/concurrency/request_rate.gpi
-
-convert "${OUTPUT_DIR}/concurrent_requests.svg" "${OUTPUT_DIR}/concurrent_requests.png"
-convert "${OUTPUT_DIR}/requests.svg" "${OUTPUT_DIR}/requests.png"
-convert "${OUTPUT_DIR}/request_rate.svg" "${OUTPUT_DIR}/request_rate.png"
+convert "${OUTPUT_DIR}/plot.svg" "${OUTPUT_DIR}/plot.png"
 
 echo "wrote files to $OUTPUT_DIR"
