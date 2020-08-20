@@ -1,0 +1,17 @@
+# used by bin/run-concurrency-test
+
+set datafile separator ','
+
+set title sprintf("test: %s\nreqs/s\n%s", test_name, parameters)
+set xlabel "Offset from start (ms)"
+set ylabel "Requests / s"
+set grid
+
+set yrange [0:]
+set xtics rotate by -45 1000
+unset key
+
+# noenhanced: underscores causing subscript in title
+set terminal svg noenhanced size 1000,1000 dynamic
+set output outfile
+plot infile using 1:2 with linespoints
