@@ -49,6 +49,7 @@ cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_requests_per_secon
 
 echo "plotting"
 gnuplot \
+  -e "test_time='${TEST_TIME}'" \
   -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
   -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
   -e "infile_active='${OUTPUT_DIR}/concurrent_requests.dat'" \
