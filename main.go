@@ -187,8 +187,8 @@ func main() {
 	rootCmd.PersistentFlags().DurationP("latency-normal-mean", "m", 0, "artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
 	rootCmd.PersistentFlags().DurationP("latency-normal-stddev", "S", 0, "standard deviation of artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
 
-	rootCmd.PersistentFlags().String("latency-expression-mean-ms", "0", "expression to use to evaluate latency of request in ms; variables: [concurrent_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
-	rootCmd.PersistentFlags().String("latency-expression-stddev-ms", "0", "expression to use to evaluate stddev of the latency of request in ms; variables: [concurrent_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
+	rootCmd.PersistentFlags().String("latency-expression-mean-ms", "0", "expression to use to evaluate latency of request in ms; variables: [active_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
+	rootCmd.PersistentFlags().String("latency-expression-stddev-ms", "0", "expression to use to evaluate stddev of the latency of request in ms; variables: [active_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
 
 	rootCmd.PersistentFlags().StringP("summary-path", "s", "/tmp/http_test_server_summary.json", "file to write out statistics summary to")
 	rootCmd.PersistentFlags().StringP("parameters-path", "p", "", "file to write out test parameters to")

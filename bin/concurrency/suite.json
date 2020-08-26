@@ -55,18 +55,18 @@
   {
     "HTTP_TEST_NAME": "exponential_latency_increase_no_variance",
     "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
-    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "concurrent_requests**2 + 200"
+    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "active_requests**2 + 200"
   },
   {
     "HTTP_TEST_NAME": "exponential_latency_increase_medium_linear_variance",
     "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
-    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "concurrent_requests**2 + 200",
-    "HTTP_TEST_LATENCY_EXPRESSION_STDDEV_MS": "concurrent_requests*50"
+    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "active_requests**2 + 200",
+    "HTTP_TEST_LATENCY_EXPRESSION_STDDEV_MS": "active_requests*50"
   },
   {
     "HTTP_TEST_NAME": "exponential_latency_increase_queueing_limit",
     "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
-    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "concurrent_requests**2 + 200",
+    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "active_requests**2 + 200",
     "HTTP_TEST_RATE_LIMIT_BEHAVIOR": "QUEUE",
     "HTTP_TEST_RATE_LIMIT_BUCKET_CAPACITY": "10",
     "HTTP_TEST_RATE_LIMIT_BUCKET_FILL_INTERVAL": "1s",
@@ -75,6 +75,6 @@
   {
     "HTTP_TEST_NAME": "linear_latency_increase_no_variance",
     "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
-    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "concurrent_requests * 10 + 200"
+    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "active_requests * 10 + 200"
   }
 ]

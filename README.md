@@ -115,12 +115,12 @@ example, to increase the latency based on the number of active requests.
 
 The expressions are expected to resolve to a number of ms.
 
-For example, providing `concurrent_requests ^ 2` for the mean would cause the
-mean latency for that request to be the number of concurrent requests, squared.
+For example, providing `active_requests ^ 2` for the mean would cause the mean
+latency for that request to be the number of in-flight requests, squared.
 
 Currently supported variables are:
 
-* `concurrent_requests`: the number of currently active requests (including this
+* `active_requests`: the number of currently active requests (including this
   one)
 
 Complete operate support can be found in the [govaluate

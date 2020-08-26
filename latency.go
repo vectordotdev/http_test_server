@@ -35,7 +35,7 @@ type LatencyMiddlewareExpression struct {
 	mean   *govaluate.EvaluableExpression
 	stddev *govaluate.EvaluableExpression
 
-	concurrentRequests uint32
+	activeRequests uint32
 }
 
 func NewLatencyMiddlewareExpression(mean string, stddev string) (*LatencyMiddlewareExpression, error) {
@@ -55,15 +55,15 @@ func NewLatencyMiddlewareExpression(mean string, stddev string) (*LatencyMiddlew
 
 func (lm *LatencyMiddlewareExpression) WrapHTTP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		atomic.AddUint32(&lm.concurrentRequests, 1)
-		defer atomic.AddUint32(&lm.concurrentRequests, ^uint32(0)) // decrement
+		atomic.AddUint32(&lm.activeRequests, 1)
+		defer atomic.AddUint32(&lm.activeRequests, ^uint32(0)) // decrement
 
 		errFn := func(err error) {
 			log.Println(err)
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 
-		parameters := &latencyExpressionParameters{concurrentRequests: atomic.LoadUint32(&lm.concurrentRequests)}
+		parameters := &latencyExpressionParameters{activeRequests: atomic.LoadUint32(&lm.activeRequests)}
 
 		v, err := lm.mean.Eval(parameters)
 		if err != nil {
@@ -102,13 +102,13 @@ func (lm *LatencyMiddlewareExpression) WrapHTTP(next http.Handler) http.Handler 
 }
 
 type latencyExpressionParameters struct {
-	concurrentRequests uint32
+	activeRequests uint32
 }
 
 func (p *latencyExpressionParameters) Get(name string) (interface{}, error) {
 	switch name {
-	case "concurrent_requests":
-		return p.concurrentRequests, nil
+	case "active_requests":
+		return p.activeRequests, nil
 	default:
 		return nil, fmt.Errorf("unknown variable name: %s", name)
 	}
