@@ -183,7 +183,7 @@ var rootCmd = &cobra.Command{
 func main() {
 	rootCmd.PersistentFlags().StringP("address", "a", "0.0.0.0:8080", "the address to bind to")
 
-	rootCmd.PersistentFlags().StringP("latency-distribution", "l", "NORMAL", "distribution of artificial latency\nOne of [NORMAL,FUNCTION]")
+	rootCmd.PersistentFlags().StringP("latency-distribution", "l", "NORMAL", "distribution of artificial latency\nOne of [NORMAL,EXPRESSION]")
 	rootCmd.PersistentFlags().DurationP("latency-normal-mean", "m", 0, "artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
 	rootCmd.PersistentFlags().DurationP("latency-normal-stddev", "S", 0, "standard deviation of artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
 
