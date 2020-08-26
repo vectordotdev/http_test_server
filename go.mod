@@ -3,6 +3,7 @@ module github.com/timberio/http_test_server
 go 1.13
 
 require (
+	github.com/Knetic/govaluate v3.0.0+incompatible
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/juju/ratelimit v1.0.1
 	github.com/mitchellh/mapstructure v1.3.3 // indirect

@@ -22,6 +22,9 @@ type parameters struct {
 	LatencyDistributionNormalMean              *string `json:"latency_distribution_normal_mean,omitempty"`
 	LatencyDistributionNormalStandardDeviation *string `json:"latency_distribution_normal_standard_deviation,omitempty"`
 
+	LatencyDistributionExpressionMean              *string `json:"latency_distribution_expression_mean,omitempty"`
+	LatencyDistributionExpressionStandardDeviation *string `json:"latency_distribution_expression_standard_deviation,omitempty"`
+
 	RateLimitBehavior           string  `json:"rate_limit_behavior"`
 	RateLimitBucketFillInterval *string `json:"rate_limit_bucket_fill_interval,omitempty"`
 	RateLimitBucketCapacity     *int64  `json:"rate_limit_bucket_capaticy,omitempty"`
@@ -58,6 +61,19 @@ var rootCmd = &cobra.Command{
 				return &s
 			}()
 			opts = append(opts, WithLatency(NewLatencyMiddlewareNormal(mean, stddev)))
+		case "EXPRESSION":
+			mean := viper.GetString("latency-expression-mean-ms")
+			parameters.LatencyDistributionExpressionMean = &mean
+
+			stddev := viper.GetString("latency-expression-stddev-ms")
+			parameters.LatencyDistributionExpressionStandardDeviation = &stddev
+
+			middleware, err := NewLatencyMiddlewareExpression(mean, stddev)
+			if err != nil {
+				return fmt.Errorf("latency expression error: %s", err)
+			}
+
+			opts = append(opts, WithLatency(middleware))
 		default:
 			return fmt.Errorf("unknown latency-distribution value: %s", latencyDistribution)
 		}
@@ -167,9 +183,12 @@ var rootCmd = &cobra.Command{
 func main() {
 	rootCmd.PersistentFlags().StringP("address", "a", "0.0.0.0:8080", "the address to bind to")
 
-	rootCmd.PersistentFlags().StringP("latency-distribution", "l", "NORMAL", "distribution of artificial latency\nOne of [NORMAL]")
+	rootCmd.PersistentFlags().StringP("latency-distribution", "l", "NORMAL", "distribution of artificial latency\nOne of [NORMAL,FUNCTION]")
 	rootCmd.PersistentFlags().DurationP("latency-normal-mean", "m", 0, "artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
 	rootCmd.PersistentFlags().DurationP("latency-normal-stddev", "S", 0, "standard deviation of artificial latency to inject; only applies when latency-distribution is NORMAL (default: 0)")
+
+	rootCmd.PersistentFlags().String("latency-expression-mean-ms", "0", "expression to use to evaluate latency of request in ms; variables: [concurrent_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
+	rootCmd.PersistentFlags().String("latency-expression-stddev-ms", "0", "expression to use to evaluate stddev of the latency of request in ms; variables: [concurrent_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
 
 	rootCmd.PersistentFlags().StringP("summary-path", "s", "/tmp/http_test_server_summary.json", "file to write out statistics summary to")
 	rootCmd.PersistentFlags().StringP("parameters-path", "p", "", "file to write out test parameters to")

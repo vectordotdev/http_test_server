@@ -64,12 +64,19 @@ Available environment variables:
   variable to configure the command. Defaults to running `$VECTOR` but can be
   used to run other tools like `ab` (e.g. `TEST_CMD='ab -t ${TEST_TIME} -n 10000
   -c 100 -m POST ${URL}'`)
-* `HTTP_TEST_LATENCY_DISTRIBUTION`: artificial latency distribution; only
+* `HTTP_TEST_LATENCY_DISTRIBUTION`: artificial latency distribution. One of:
+  `NORMAL` for latencies distributed using the normal distribution; `EXPRESSION`
+  to provide an expression to calculate the mean / stddev depending on other
+  parameters (see below for expression details)
   `NORMAL` is currently supported (the default)
 * `HTTP_TEST_LATENCY_NORMAL_MEAN`: artificial latency mean for the `NORMAL`
   distribution
 * `HTTP_TEST_LATENCY_NORMAL_STDDEV`: artificial latency standard devation for
   the `NORMAL` distribution
+* `HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS`: an expression to calcelate the mean
+  latency of the request. See below for expression details.
+* `HTTP_TEST_LATENCY_EXPRESSION_STDDEV_MS`: an expression to calcelate the
+  stddev of the request latency. See below for expression details.
 * `HTTP_TEST_RATE_LIMIT_BEHAVIOR`: the behavior of the rate limiting. Possible
   values: `NONE` (no rate limit; the default); `HARD` (return a HTTP 429 when
   limit is hit); `CLOSE` (close the connection without response when limit is
@@ -99,6 +106,26 @@ HTTP_TEST_RATE_LIMIT_BEHAVIOR=HARD \
 
 This will run the test server with a simulated latency of 500ms and a hard rate
 limit of 5 requests per second (refreshed every second).
+
+#### Latency expression support
+
+When using `HTTP_TEST_LATENCY_DISTRIBUTION=EXPRESSION` an expression can be
+provided to calculate the latency based on other variables. This is useful, for
+example, to increase the latency based on the number of active requests.
+
+The expressions are expected to resolve to a number of ms.
+
+For example, providing `concurrent_requests ^ 2` for the mean would cause the
+mean latency for that request to be the number of concurrent requests, squared.
+
+Currently supported variables are:
+
+* `concurrent_requests`: the number of currently active requests (including this
+  one)
+
+Complete operate support can be found in the [govaluate
+documentation](https://github.com/Knetic/govaluate/blob/master/MANUAL.md#operators).
+This library is used to evaluate the expressions.
 
 ### Running the concurrency test suite
 
