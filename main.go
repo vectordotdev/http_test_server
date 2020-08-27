@@ -124,6 +124,17 @@ var rootCmd = &cobra.Command{
 
 		parameters.RateLimitBehavior = behavior
 
+		if expression := viper.GetString("error-expression"); expression != "" {
+			middleware, err := NewErrorExpressionMiddleware(expression)
+			if err != nil {
+				return fmt.Errorf("error expression error: %s", err)
+			}
+
+			parameters.ErrorExpression = &expression
+
+			opts = append(opts, WithError(middleware))
+		}
+
 		if parametersPath != "" {
 			b, err := json.Marshal(parameters)
 			if err != nil {
@@ -134,17 +145,6 @@ var rootCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
-		}
-
-		if expression := viper.GetString("error-expression"); expression != "" {
-			middleware, err := NewErrorExpressionMiddleware(expression)
-			if err != nil {
-				return fmt.Errorf("error expression error: %s", err)
-			}
-
-			parameters.ErrorExpression = &expression
-
-			opts = append(opts, WithError(middleware))
 		}
 
 		server := NewServer(viper.GetString("address"), opts...)
