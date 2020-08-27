@@ -1,4 +1,4 @@
-Automated # HTTP Test Server
+# Automated HTTP Test Server
 
 A simple HTTP server useful for testing.
 
