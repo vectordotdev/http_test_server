@@ -76,5 +76,15 @@
     "HTTP_TEST_NAME": "linear_latency_increase_no_variance",
     "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
     "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "active_requests * 10 + 200"
+  },
+  {
+    "HTTP_TEST_NAME": "simple_error",
+    "HTTP_TEST_LATENCY_NORMAL_MEAN": "200ms",
+    "HTTP_TEST_ERROR_EXPRESSION": "rand() < 0.1"
+  },
+  {
+    "HTTP_TEST_NAME": "error_linear_load",
+    "HTTP_TEST_LATENCY_NORMAL_MEAN": "200ms",
+    "HTTP_TEST_ERROR_EXPRESSION": "rand() < (0.1 * active_requests)"
   }
 ]
