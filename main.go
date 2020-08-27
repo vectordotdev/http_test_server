@@ -25,6 +25,8 @@ type parameters struct {
 	LatencyDistributionExpressionMean              *string `json:"latency_distribution_expression_mean,omitempty"`
 	LatencyDistributionExpressionStandardDeviation *string `json:"latency_distribution_expression_standard_deviation,omitempty"`
 
+	ErrorExpression *string `json:"error_expression,omitempty"`
+
 	RateLimitBehavior           string  `json:"rate_limit_behavior"`
 	RateLimitBucketFillInterval *string `json:"rate_limit_bucket_fill_interval,omitempty"`
 	RateLimitBucketCapacity     *int64  `json:"rate_limit_bucket_capaticy,omitempty"`
@@ -134,6 +136,17 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		if expression := viper.GetString("error-expression"); expression != "" {
+			middleware, err := NewErrorExpressionMiddleware(expression)
+			if err != nil {
+				return fmt.Errorf("error expression error: %s", err)
+			}
+
+			parameters.ErrorExpression = &expression
+
+			opts = append(opts, WithError(middleware))
+		}
+
 		server := NewServer(viper.GetString("address"), opts...)
 
 		done := make(chan struct{})
@@ -189,6 +202,8 @@ func main() {
 
 	rootCmd.PersistentFlags().String("latency-expression-mean-ms", "0", "expression to use to evaluate latency of request in ms; variables: [active_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
 	rootCmd.PersistentFlags().String("latency-expression-stddev-ms", "0", "expression to use to evaluate stddev of the latency of request in ms; variables: [active_requests]; only applies when latency-distribution is EXPRESSION (default: '0')")
+
+	rootCmd.PersistentFlags().StringP("error-expression", "e", "", "expression to evaluate to determine if the request should error; variables: [active_requests]\nIt is expected to return one of:\nfalse if the request should not error\ntrue if the request should error with 500\nan integer value if the request should error with the given HTTP status code\nthe string CLOSE if the request should error by simply closing the connection")
 
 	rootCmd.PersistentFlags().StringP("summary-path", "s", "/tmp/http_test_server_summary.json", "file to write out statistics summary to")
 	rootCmd.PersistentFlags().StringP("parameters-path", "p", "", "file to write out test parameters to")

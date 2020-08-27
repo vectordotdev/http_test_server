@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -158,4 +160,8 @@ func (w *responseWriterWrapper) Write(b []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(b)
 	w.written += int64(n)
 	return n, err
+}
+
+func (f *responseWriterWrapper) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return f.ResponseWriter.(http.Hijacker).Hijack()
 }

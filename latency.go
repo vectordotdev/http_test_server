@@ -39,11 +39,11 @@ type LatencyMiddlewareExpression struct {
 }
 
 func NewLatencyMiddlewareExpression(mean string, stddev string) (*LatencyMiddlewareExpression, error) {
-	meanExpression, err := govaluate.NewEvaluableExpression(mean)
+	meanExpression, err := govaluate.NewEvaluableExpressionWithFunctions(mean, expressionFunctions)
 	if err != nil {
 		return nil, fmt.Errorf("could not use mean expression: %s", err)
 	}
-	stddevExpression, err := govaluate.NewEvaluableExpression(stddev)
+	stddevExpression, err := govaluate.NewEvaluableExpressionWithFunctions(stddev, expressionFunctions)
 	if err != nil {
 		return nil, fmt.Errorf("could not use stddev expression: %s", err)
 	}
@@ -63,7 +63,7 @@ func (lm *LatencyMiddlewareExpression) WrapHTTP(next http.Handler) http.Handler 
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 
-		parameters := &latencyExpressionParameters{activeRequests: atomic.LoadUint32(&lm.activeRequests)}
+		parameters := &expressionParameters{activeRequests: atomic.LoadUint32(&lm.activeRequests)}
 
 		v, err := lm.mean.Eval(parameters)
 		if err != nil {
@@ -99,19 +99,6 @@ func (lm *LatencyMiddlewareExpression) WrapHTTP(next http.Handler) http.Handler 
 		time.Sleep(d)
 		next.ServeHTTP(rw, r)
 	})
-}
-
-type latencyExpressionParameters struct {
-	activeRequests uint32
-}
-
-func (p *latencyExpressionParameters) Get(name string) (interface{}, error) {
-	switch name {
-	case "active_requests":
-		return p.activeRequests, nil
-	default:
-		return nil, fmt.Errorf("unknown variable name: %s", name)
-	}
 }
 
 type LatencyDistribution string

@@ -23,6 +23,7 @@ var (
 type ServerOptions struct {
 	RateLimiter Middleware
 	Latency     Middleware
+	Error       Middleware
 }
 
 type Server struct {
@@ -97,6 +98,12 @@ func WithRateLimiter(limiter Middleware) func(*ServerOptions) {
 	}
 }
 
+func WithError(errorer Middleware) func(*ServerOptions) {
+	return func(s *ServerOptions) {
+		s.Error = errorer
+	}
+}
+
 func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
@@ -123,9 +130,15 @@ func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 		statisticsMiddleware: newStatisticsMiddleware(),
 	}
 
+	errorExpressionMiddleware, err := NewErrorExpressionMiddleware("false")
+	if err != nil {
+		panic(err) // should never happen
+	}
+
 	serverOptions := ServerOptions{
 		RateLimiter: &RateLimiterNone{},
 		Latency:     NewLatencyMiddlewareNormal(time.Duration(0), time.Duration(0)),
+		Error:       errorExpressionMiddleware,
 	}
 
 	for _, opt := range opts {
@@ -134,6 +147,7 @@ func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 
 	var indexHandler http.Handler = http.HandlerFunc(server.Index)
 	indexHandler = serverOptions.Latency.WrapHTTP(indexHandler)
+	indexHandler = serverOptions.Error.WrapHTTP(indexHandler)
 	indexHandler = serverOptions.RateLimiter.WrapHTTP(indexHandler)
 	indexHandler = server.statisticsMiddleware.WrapHTTP(indexHandler)
 	router.Handle("/", indexHandler)

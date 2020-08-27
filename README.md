@@ -77,6 +77,8 @@ Available environment variables:
   latency of the request. See below for expression details.
 * `HTTP_TEST_LATENCY_EXPRESSION_STDDEV_MS`: an expression to calcelate the
   stddev of the request latency. See below for expression details.
+* `HTTP_TEST_ERROR_EXPRESSION`: expression to evaluate to determine if the request should error. See below for expression details. It is expected to return one of: false if the request should not error; true if the request should error with 500; an integer value if the request should error with the given HTTP status code; the string 'CLOSE' if the request should error by simply closing the connection
+  latency of the request. See below for expression details.
 * `HTTP_TEST_RATE_LIMIT_BEHAVIOR`: the behavior of the rate limiting. Possible
   values: `NONE` (no rate limit; the default); `HARD` (return a HTTP 429 when
   limit is hit); `CLOSE` (close the connection without response when limit is
@@ -107,7 +109,7 @@ HTTP_TEST_RATE_LIMIT_BEHAVIOR=HARD \
 This will run the test server with a simulated latency of 500ms and a hard rate
 limit of 5 requests per second (refreshed every second).
 
-#### Latency expression support
+#### Expression support
 
 When using `HTTP_TEST_LATENCY_DISTRIBUTION=EXPRESSION` an expression can be
 provided to calculate the latency based on other variables. This is useful, for
@@ -118,12 +120,19 @@ The expressions are expected to resolve to a number of ms.
 For example, providing `active_requests ^ 2` for the mean would cause the mean
 latency for that request to be the number of in-flight requests, squared.
 
-Currently supported variables are:
+When using `HTTP_TEST_ERROR_EXPRESSION` an expression can be provided to
+determine if the active request should be allowed through or errored.
+
+For all expression, supported variables are:
 
 * `active_requests`: the number of currently active requests (including this
   one)
 
-Complete operate support can be found in the [govaluate
+For all expression, supported functioare:
+
+* `rand()`: return a random number in [0.0,1.0)
+
+Complete operator support can be found in the [govaluate
 documentation](https://github.com/Knetic/govaluate/blob/master/MANUAL.md#operators).
 This library is used to evaluate the expressions.
 
