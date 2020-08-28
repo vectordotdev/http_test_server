@@ -27,11 +27,11 @@ set palette defined ( \
 # Define palette labels, the range matches the number of colors defined above
 set cbrange [0:5]
 set cbtics offset 0,+6 ( \
-  '100' 0, \
-  '200' 1, \
-  '300' 2, \
-  '400' 3, \
-  '500' 4, \
+  '1Xx' 0, \
+  '2XX' 1, \
+  '3XX' 2, \
+  '4XX' 3, \
+  '5XX' 4, \
   '' 5)
 
 map_color(code) = ( \
