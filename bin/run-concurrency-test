@@ -18,15 +18,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
 TEST_TIME=${TEST_TIME:-60} # how many seconds to run test for
 HTTP_TEST_ADDRESS=${HTTP_TEST_ADDRESS:-localhost:8080}
 
-# Can set:
-#
-# HTTP_TEST_LATENCY_MEAN
-# HTTP_TEST_RATE_LIMIT_BEHAVIOR
-# HTTP_TEST_RATE_LIMIT_BUCKET_CAPACITY
-# HTTP_TEST_RATE_LIMIT_BUCKET_FILL_INTERVAL
-# HTTP_TEST_RATE_LIMIT_BUCKET_QUANTUM
-#
-# See ../README.md for details
+# See ../README.md for additional environment variables that can be set to
+# control server behavior
 
 echo "writing output files to $OUTPUT_DIR"
 
