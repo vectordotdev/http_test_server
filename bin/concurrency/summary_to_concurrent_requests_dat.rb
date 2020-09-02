@@ -20,10 +20,6 @@ requests = summary["requests"].select { |r| r["status"] == 204 }.map do |r|
   r["start"] = DateTime.parse(r["start"])
   r["end"] = DateTime.parse(r["end"])
 
-  if (r["end"] - r["start"]) < step then
-    STDERR.puts "WARNING: found request with latency less than step: #{r.inspect}"
-  end
-
   r
 end
 
@@ -33,7 +29,8 @@ end_time = requests.map{ |r| r["end"] }.max
 puts "# offset (ms), active requests"
 start_time.step(end_time, step).each do |d|
   num_active = requests.select do |r|
-    r["start"] < d and r["end"] > d
+    # count active requests or requests that started and ended within the previous step window
+    (r["start"] < d and r["end"] > d) or (r["start"] > (d - step) and r["end"] < d)
   end.length
 
   # date subtraction gives fraction of days, multiply to get ms
