@@ -86,5 +86,15 @@
     "HTTP_TEST_NAME": "error_linear_load",
     "HTTP_TEST_LATENCY_NORMAL_MEAN": "200ms",
     "HTTP_TEST_ERROR_EXPRESSION": "rand() < (0.1 * active_requests)"
+  },
+  {
+    "HTTP_TEST_NAME": "knee_low_slope",
+    "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
+    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "200 + active_requests * 5 + (0<=active_requests && active_requests<10 ? 0 : 2 ** (active_requests - 10))"
+  },
+  {
+    "HTTP_TEST_NAME": "knee_high_slope",
+    "HTTP_TEST_LATENCY_DISTRIBUTION": "EXPRESSION",
+    "HTTP_TEST_LATENCY_EXPRESSION_MEAN_MS": "200 + active_requests * 10 + (0<=active_requests && active_requests<10 ? 0 : 2 ** (active_requests - 10))"
   }
 ]
