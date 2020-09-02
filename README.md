@@ -157,5 +157,15 @@ environment variables that can be used to modify the behavior (see script).
 It will output the directory which will contain a subdirectory for each test
 with the test artifacts.
 
+# Acknowledgements
+
+Relies on [GNU parallel](https://www.gnu.org/software/parallel/) for
+parallelizing tests:
+
+```
+O. Tange (2011): GNU Parallel - The Command-Line Power Tool,
+  ;login: The USENIX Magazine, February 2011:42-47.
+```
+
 [test harness]: https://github.com/timberio/vector-test-harness
 [Vector]: https://github.com/timberio/vector
