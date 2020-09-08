@@ -18,7 +18,6 @@ export -f next_port
 
 run_test() {
 	line=$1
-  #unset "${!HTTP_TEST_@}" # unset any old test variables
   while IFS== read -r key value; do
     eval "export $key='$value'"
   done < <(echo "${line}" | jq --raw-output 'to_entries | .[] | .key + "=" + .value ')

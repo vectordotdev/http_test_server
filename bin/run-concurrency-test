@@ -17,6 +17,8 @@ HTTP_TEST_SERVER="${HTTP_TEST_SERVER:-${DIR}/../http_test_server}"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
 TEST_TIME=${TEST_TIME:-60} # how many seconds to run test for
 HTTP_TEST_ADDRESS=${HTTP_TEST_ADDRESS:-localhost:8080}
+HTTP_TEST_NAME=${HTTP_TEST_NAME:-unknown}
+HTTP_TEST_DESCRIPTION=${HTTP_TEST_DESCRIPTION:-${HTTP_TEST_NAME}}
 
 # See ../README.md for additional environment variables that can be set to
 # control server behavior
@@ -43,7 +45,8 @@ cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_requests_per_secon
 echo "plotting"
 gnuplot \
   -e "test_time='${TEST_TIME}'" \
-  -e "test_name='${HTTP_TEST_NAME:-unnamed}'" \
+  -e "test_name='${HTTP_TEST_NAME}'" \
+  -e "test_description='${HTTP_TEST_DESCRIPTION}'" \
   -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
   -e "infile_active='${OUTPUT_DIR}/concurrent_requests.dat'" \
   -e "infile_rate='${OUTPUT_DIR}/request_rate.dat'" \

@@ -35,7 +35,8 @@ type LatencyMiddlewareExpression struct {
 	mean   *govaluate.EvaluableExpression
 	stddev *govaluate.EvaluableExpression
 
-	activeRequests uint32
+	activeRequests  uint32
+	serverStartTime time.Time
 }
 
 func NewLatencyMiddlewareExpression(mean string, stddev string) (*LatencyMiddlewareExpression, error) {
@@ -48,8 +49,9 @@ func NewLatencyMiddlewareExpression(mean string, stddev string) (*LatencyMiddlew
 		return nil, fmt.Errorf("could not use stddev expression: %s", err)
 	}
 	return &LatencyMiddlewareExpression{
-		mean:   meanExpression,
-		stddev: stddevExpression,
+		mean:            meanExpression,
+		stddev:          stddevExpression,
+		serverStartTime: time.Now(),
 	}, nil
 }
 
@@ -63,7 +65,10 @@ func (lm *LatencyMiddlewareExpression) WrapHTTP(next http.Handler) http.Handler 
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 
-		parameters := &expressionParameters{activeRequests: atomic.LoadUint32(&lm.activeRequests)}
+		parameters := &expressionParameters{
+			activeRequests: atomic.LoadUint32(&lm.activeRequests),
+			t:              time.Now().Sub(lm.serverStartTime),
+		}
 
 		v, err := lm.mean.Eval(parameters)
 		if err != nil {

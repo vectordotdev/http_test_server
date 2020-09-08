@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/Knetic/govaluate"
 )
@@ -12,7 +13,8 @@ import (
 type ErrorExpressionMiddleware struct {
 	expr *govaluate.EvaluableExpression
 
-	activeRequests uint32
+	activeRequests  uint32
+	serverStartTime time.Time
 }
 
 func NewErrorExpressionMiddleware(expression string) (*ErrorExpressionMiddleware, error) {
@@ -22,7 +24,8 @@ func NewErrorExpressionMiddleware(expression string) (*ErrorExpressionMiddleware
 	}
 
 	return &ErrorExpressionMiddleware{
-		expr: expr,
+		expr:            expr,
+		serverStartTime: time.Now(),
 	}, nil
 }
 
@@ -36,7 +39,10 @@ func (em *ErrorExpressionMiddleware) WrapHTTP(next http.Handler) http.Handler {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 		}
 
-		parameters := &expressionParameters{activeRequests: atomic.LoadUint32(&em.activeRequests)}
+		parameters := &expressionParameters{
+			activeRequests: atomic.LoadUint32(&em.activeRequests),
+			t:              time.Now().Sub(em.serverStartTime),
+		}
 
 		v, err := em.expr.Eval(parameters)
 		if err != nil {

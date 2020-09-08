@@ -127,10 +127,13 @@ For all expression, supported variables are:
 
 * `active_requests`: the number of currently active requests (including this
   one)
+* `t`: the number of seconds (float) since the server started
+* `pi`: a constant for Pi
 
 For all expression, supported functioare:
 
 * `rand()`: return a random number in [0.0,1.0)
+* `sin(x)`: returns the sin of x
 
 Complete operator support can be found in the [govaluate
 documentation](https://github.com/Knetic/govaluate/blob/master/MANUAL.md#operators).
