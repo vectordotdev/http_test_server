@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+export DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+export OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
+PARALLEL="${PARALLEL:-$(nproc)}"
+
+echo "writing results under ${OUTPUT_DIR}"
+
+# TODO(jesse) better free port detectian
+next_port() {
+  BASE_PORT=16998
+
+  echo $((${BASE_PORT}+${PARALLEL_SEQ}))
+}
+export -f next_port
+
+run_test() {
+	line=$1
+  while IFS== read -r key value; do
+    eval "export $key='$value'"
+  done < <(echo "${line}" | jq --raw-output 'to_entries | .[] | .key + "=" + .value ')
+
+  echo "running concurrency test: ${HTTP_TEST_NAME}"
+
+  export HTTP_TEST_ADDRESS="localhost:$(next_port)"
+
+  TEST_OUTPUT_DIR="${OUTPUT_DIR}/${HTTP_TEST_NAME}"
+  mkdir "${TEST_OUTPUT_DIR}"
+
+  OUTPUT_DIR="${TEST_OUTPUT_DIR}" ${DIR}/run-concurrency-test > >(sed "s/^/${HTTP_TEST_NAME}: /")  2> >(sed "s/^/${HTTP_TEST_NAME}: /" >&2)
+}
+export -f run_test
+
+cat "${DIR}/concurrency/suite.json" | jq --raw-output --compact-output '.[]' | parallel --will-cite --line-buffer --max-procs "${PARALLEL}" run_test '{}'
+
+echo "wrote results under ${OUTPUT_DIR}"

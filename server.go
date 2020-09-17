@@ -2,16 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -25,156 +20,91 @@ var (
 	healthy int32
 )
 
-var summaryPath = "/tmp/http_test_server_summary.json"
-
-type ESVersion struct {
-	Number string `json:"number"`
-}
-
-type ESMeta struct {
-	Version *ESVersion `json:"version"`
+type ServerOptions struct {
+	RateLimiter Middleware
+	Latency     Middleware
+	Error       Middleware
 }
 
 type Server struct {
-	address      string
-	ByteTotal    int64 `json:"byte_total"`
-	file         *os.File
-	FirstMessage string `json:"first_message"`
-	LastMessage  string `json:"last_message"`
-	logger       *log.Logger
-	MessageCount int64 `json:"message_count"`
-	RequestCount int64 `json:"request_count"`
-	server       *http.Server
+	server *http.Server
+	logger *log.Logger
+
+	quit chan (struct{})
+
+	statisticsMiddleware *statisticsMiddleware
+}
+
+type Middleware interface {
+	WrapHTTP(http.Handler) http.Handler
 }
 
 func (s *Server) Listen() {
-	var gracefulStop = make(chan os.Signal)
-	signal.Notify(gracefulStop, syscall.SIGTERM)
-	signal.Notify(gracefulStop, syscall.SIGINT)
-
-	go func() {
-		sig := <-gracefulStop
-		s.logger.Printf("Caught sig: %+v", sig)
-
-		s.WriteSummary()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		s.server.SetKeepAlivesEnabled(false)
-		if err := s.server.Shutdown(ctx); err != nil {
-			s.logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
-		}
-
-		s.logger.Println("Server stopped")
-		os.Exit(0)
-	}()
-
 	// Print debug output on an interval. This helps with providing insight
 	// into activity without saturating IO.
 	ticker := time.NewTicker(5 * time.Second)
-	quit := make(chan struct{})
+	s.quit = make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				log.Printf("Received %v messages across %v requests", s.MessageCount, s.RequestCount)
-			case <-quit:
+				log.Printf("Received %v messages across %v requests", s.statisticsMiddleware.MessageCount(), s.statisticsMiddleware.RequestCount())
+			case <-s.quit:
 				ticker.Stop()
 				return
 			}
 		}
 	}()
 
-	s.logger.Println("Server is ready to handle requests at", s.address)
+	s.logger.Println("Server is ready to handle requests at", s.server.Addr)
 	atomic.StoreInt32(&healthy, 1)
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		s.logger.Fatalf("Could not listen on %s: %v\n", s.address, err)
+		s.logger.Fatalf("Could not listen on %s: %v\n", s.server.Addr, err)
 	}
 }
 
-func (s *Server) WriteSummary() {
-	sBytes, err := json.Marshal(s)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = ioutil.WriteFile(summaryPath, sBytes, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("Wrote activity summary to %s", summaryPath)
+func (s *Server) Statistics() Statistics {
+	return s.statisticsMiddleware.Statistics()
 }
 
-func (s *Server) Index() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.RequestCount++
+func (s *Server) Shutdown(ctx context.Context) error {
+	close(s.quit)
+	s.server.SetKeepAlivesEnabled(false)
+	return s.server.Shutdown(ctx)
+}
 
-		contentType := r.Header.Get("Content-Type")
-		contentLength := r.Header.Get("Content-Length")
-		s.logger.Printf("Received request: content-type: %v, content-length: %v", contentType, contentLength)
+func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+	fmt.Fprintln(w, "")
+}
 
-		bodyBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			s.logger.Printf("Error reading body: %v", err)
-			http.Error(w, "can't read body", http.StatusBadRequest)
-			return
-		}
-
-		byteLen := len(bodyBytes)
-		body := string(bodyBytes)
-		messages := []string{}
-
-		switch contentType {
-		// Unfortunately fluentbit does not use the proper content type when sending
-		// new line delimited JSON :(
-		case "application/json":
-			messages = strings.Split(body, "\n")
-		case "application/ndjson":
-			messages = strings.Split(body, "\n")
-		case "application/x-ndjson":
-			messages = strings.Split(body, "\n")
-		case "text/plain":
-			messages = strings.Split(body, "\n")
-		}
-
-		messageCount := len(messages)
-
-		if messageCount > 0 {
-			s.ByteTotal = s.ByteTotal + int64(byteLen)
-			s.MessageCount = s.MessageCount + int64(messageCount)
-
-			firstMessage := messages[0]
-			lastMessage := messages[messageCount-1]
-
-			if s.FirstMessage == "" && firstMessage != "" {
-				s.FirstMessage = messages[0]
-			}
-
-			if lastMessage != "" {
-				s.LastMessage = lastMessage
-			}
-		}
-
+func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
+	if atomic.LoadInt32(&healthy) == 1 {
 		w.WriteHeader(http.StatusNoContent)
-		fmt.Fprintln(w, "")
-	})
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
 }
 
-func (s *Server) Health() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.LoadInt32(&healthy) == 1 {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		w.WriteHeader(http.StatusServiceUnavailable)
-	})
+func WithLatency(latency Middleware) func(*ServerOptions) {
+	return func(s *ServerOptions) {
+		s.Latency = latency
+	}
 }
 
-func NewServer(address string) *Server {
-	os.Remove(summaryPath)
+func WithRateLimiter(limiter Middleware) func(*ServerOptions) {
+	return func(s *ServerOptions) {
+		s.RateLimiter = limiter
+	}
+}
 
+func WithError(errorer Middleware) func(*ServerOptions) {
+	return func(s *ServerOptions) {
+		s.Error = errorer
+	}
+}
+
+func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
 
@@ -193,19 +123,38 @@ func NewServer(address string) *Server {
 		IdleTimeout:  15 * time.Second,
 	}
 
-	server := &Server{
-		address:      address,
-		ByteTotal:    0,
-		logger:       logger,
-		MessageCount: 0,
-		RequestCount: 0,
-		server:       httpServer,
+	server := Server{
+		server: httpServer,
+		logger: logger,
+
+		statisticsMiddleware: newStatisticsMiddleware(),
 	}
 
-	router.Handle("/", server.Index())
-	router.Handle("/_health", server.Health())
+	errorExpressionMiddleware, err := NewErrorExpressionMiddleware("false")
+	if err != nil {
+		panic(err) // should never happen
+	}
 
-	return server
+	serverOptions := ServerOptions{
+		RateLimiter: &RateLimiterNone{},
+		Latency:     NewLatencyMiddlewareNormal(time.Duration(0), time.Duration(0)),
+		Error:       errorExpressionMiddleware,
+	}
+
+	for _, opt := range opts {
+		opt(&serverOptions)
+	}
+
+	var indexHandler http.Handler = http.HandlerFunc(server.Index)
+	indexHandler = serverOptions.Latency.WrapHTTP(indexHandler)
+	indexHandler = serverOptions.Error.WrapHTTP(indexHandler)
+	indexHandler = serverOptions.RateLimiter.WrapHTTP(indexHandler)
+	indexHandler = server.statisticsMiddleware.WrapHTTP(indexHandler)
+	router.Handle("/", indexHandler)
+
+	router.HandleFunc("/_health", server.Health)
+
+	return &server
 }
 
 func logging(logger *log.Logger) func(http.Handler) http.Handler {

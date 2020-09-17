@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+for cmd in convert jq gnuplot ruby ; do
+  if ! command -v "${cmd}" &> /dev/null
+  then
+    echo "${cmd} could not be found"
+    exit
+  fi
+done
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+VECTOR="${VECTOR:-vector}"
+TEST_CMD="${TEST_CMD:-"${VECTOR} -vv --config ${DIR}/concurrency/vector.toml"}"
+HTTP_TEST_SERVER="${HTTP_TEST_SERVER:-${DIR}/../http_test_server}"
+OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
+TEST_TIME=${TEST_TIME:-60} # how many seconds to run test for
+HTTP_TEST_ADDRESS=${HTTP_TEST_ADDRESS:-localhost:8080}
+HTTP_TEST_NAME=${HTTP_TEST_NAME:-unknown}
+HTTP_TEST_DESCRIPTION=${HTTP_TEST_DESCRIPTION:-${HTTP_TEST_NAME}}
+
+# See ../README.md for additional environment variables that can be set to
+# control server behavior
+
+echo "writing output files to $OUTPUT_DIR"
+
+export HTTP_TEST_SUMMARY_PATH="${OUTPUT_DIR}/summary.json"
+export HTTP_TEST_PARAMETERS_PATH="${OUTPUT_DIR}/parameters.json"
+export URL="http://${HTTP_TEST_ADDRESS}/"
+
+echo "starting test server"
+timeout ${TEST_TIME} ${HTTP_TEST_SERVER} 2>"${OUTPUT_DIR}/server.err" > "${OUTPUT_DIR}/server.log" &
+
+echo "running test command"
+timeout --signal KILL ${TEST_TIME} bash -c "${TEST_CMD}" 2>"${OUTPUT_DIR}/test_cmd.err" > "${OUTPUT_DIR}/test_cmd.log" &
+
+wait
+
+echo "processing output"
+cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_concurrent_requests_dat.rb > ${OUTPUT_DIR}/concurrent_requests.dat
+cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_requests_dat.rb > ${OUTPUT_DIR}/requests.dat
+cat ${HTTP_TEST_SUMMARY_PATH} | ${DIR}/concurrency/summary_to_requests_per_second.rb > ${OUTPUT_DIR}/request_rate.dat
+
+echo "plotting"
+gnuplot \
+  -e "test_time='${TEST_TIME}'" \
+  -e "test_name='${HTTP_TEST_NAME}'" \
+  -e "test_description='${HTTP_TEST_DESCRIPTION}'" \
+  -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
+  -e "infile_active='${OUTPUT_DIR}/concurrent_requests.dat'" \
+  -e "infile_rate='${OUTPUT_DIR}/request_rate.dat'" \
+  -e "infile_lifetime='${OUTPUT_DIR}/requests.dat'" \
+  -e "outfile='${OUTPUT_DIR}/plot.svg'" \
+  ${DIR}/concurrency/plot.gpi
+
+convert "${OUTPUT_DIR}/plot.svg" "${OUTPUT_DIR}/plot.png"
+
+echo "wrote files to $OUTPUT_DIR"

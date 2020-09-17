@@ -1,0 +1,63 @@
+# used by bin/run-concurrency-test
+
+# noenhanced: underscores causing subscript in title
+set terminal svg noenhanced size 3000,1000 dynamic
+set output outfile
+
+set multiplot layout 1,3 title sprintf("test: %s\n%s\n%s", test_name, test_description, parameters) font ",14"
+
+set datafile separator ','
+
+set xrange[0:test_time*1000]
+set xtics rotate by -45 1000
+set grid
+unset key
+
+#
+
+# https://github.com/Gnuplotting/gnuplot-palettes/blob/master/dark2.pal
+set palette maxcolors 5
+set palette defined ( \
+  0 '#1B9E77',\
+  1 '#D95F02',\
+  2 '#7570B3',\
+  3 '#E7298A',\
+  4 '#A6761D')
+
+# Define palette labels, the range matches the number of colors defined above
+set cbrange [0:5]
+set cbtics offset 0,+6 ( \
+  '1Xx' 0, \
+  '2XX' 1, \
+  '3XX' 2, \
+  '4XX' 3, \
+  '5XX' 4, \
+  '' 5)
+
+map_color(code) = ( \
+    (code < 200) ? 0 : \
+    (code < 300) ? 1 : \
+    (code < 400) ? 2 : \
+    (code < 500) ? 3 : \
+    4)
+
+set title "Request Lifetimes"
+set xlabel "Offset from start (ms)"
+set ylabel "Requests"
+set yrange [0:]
+set style arrow 1 heads back filled linecolor palette linewidth 2 dashtype solid size screen  0.008,90.000,90.00 fixed
+plot infile_lifetime using 2:1:($3-$2):(0.0):(map_color($4)) with vector as 1
+
+#
+
+set title "Active Requests"
+set xlabel "Offset from start (ms)"
+set ylabel "Number of active requests"
+plot infile_active using 1:2 with linespoints
+
+#
+
+set title "Request Rate"
+set xlabel "Offset from start (ms)"
+set ylabel "Requests / s"
+plot infile_rate using 1:2 with linespoints
