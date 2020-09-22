@@ -1,6 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
+if [ $# -ne 1 ]; then
+  echo "usage: $0 FILENAME.sh"
+  exit 1
+fi
+
+source "$1"
+export HTTP_TEST_{LATENCY_{DISTRIBUTION,MEAN,NORMAL_{MEAN,STDDEV},EXPRESSION_{MEAN,STDDEV}_MS},RATE_LIMIT_{BEHAVIOR,HARD_STATUS_CODE,BUCKET_{CAPACITY,QUANTUM,FILL_INTERVAL}}}
+
+HTTP_TEST_NAME="${1##*/}"
+HTTP_TEST_NAME="${HTTP_TEST_NAME%.sh}"
+
 for cmd in convert jq gnuplot ruby ; do
   if ! command -v "${cmd}" &> /dev/null
   then
@@ -17,7 +28,6 @@ HTTP_TEST_SERVER="${HTTP_TEST_SERVER:-${DIR}/../http_test_server}"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t vector-XXXXXXXXXX)}"
 TEST_TIME=${TEST_TIME:-60} # how many seconds to run test for
 HTTP_TEST_ADDRESS=${HTTP_TEST_ADDRESS:-localhost:8080}
-HTTP_TEST_NAME=${HTTP_TEST_NAME:-unknown}
 HTTP_TEST_DESCRIPTION=${HTTP_TEST_DESCRIPTION:-${HTTP_TEST_NAME}}
 
 # See ../README.md for additional environment variables that can be set to
