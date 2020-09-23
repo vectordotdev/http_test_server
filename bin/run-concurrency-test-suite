@@ -17,10 +17,9 @@ next_port() {
 export -f next_port
 
 run_test() {
-	line=$1
-  while IFS== read -r key value; do
-    eval "export $key='$value'"
-  done < <(echo "${line}" | jq --raw-output 'to_entries | .[] | .key + "=" + .value ')
+  suite=$1
+  HTTP_TEST_NAME="${1##*/}"
+  HTTP_TEST_NAME="${HTTP_TEST_NAME%.sh}"
 
   echo "running concurrency test: ${HTTP_TEST_NAME}"
 
@@ -29,10 +28,10 @@ run_test() {
   TEST_OUTPUT_DIR="${OUTPUT_DIR}/${HTTP_TEST_NAME}"
   mkdir "${TEST_OUTPUT_DIR}"
 
-  OUTPUT_DIR="${TEST_OUTPUT_DIR}" ${DIR}/run-concurrency-test > >(sed "s/^/${HTTP_TEST_NAME}: /")  2> >(sed "s/^/${HTTP_TEST_NAME}: /" >&2)
+  OUTPUT_DIR="${TEST_OUTPUT_DIR}" ${DIR}/run-concurrency-test "$suite" > >(sed "s/^/${HTTP_TEST_NAME}: /")  2> >(sed "s/^/${HTTP_TEST_NAME}: /" >&2)
 }
 export -f run_test
 
-cat "${DIR}/concurrency/suite.json" | jq --raw-output --compact-output '.[]' | parallel --will-cite --line-buffer --max-procs "${PARALLEL}" run_test '{}'
+parallel --will-cite --line-buffer --max-procs "${PARALLEL}" run_test '{}' ::: "$DIR"/concurrency/suite/*.sh
 
 echo "wrote results under ${OUTPUT_DIR}"
