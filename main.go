@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +19,8 @@ import (
 )
 
 type parameters struct {
+	Address string `json:"address"`
+
 	LatencyDistribution                        string  `json:"latency_distribution"`
 	LatencyDistributionNormalMean              *string `json:"latency_distribution_normal_mean,omitempty"`
 	LatencyDistributionNormalStandardDeviation *string `json:"latency_distribution_normal_standard_deviation,omitempty"`
@@ -135,6 +138,13 @@ var rootCmd = &cobra.Command{
 			opts = append(opts, WithError(middleware))
 		}
 
+		listener, err := net.Listen("tcp", viper.GetString("address"))
+		if err != nil {
+			return fmt.Errorf("coulld not bind to address: %s", err)
+		}
+
+		parameters.Address = listener.Addr().String()
+
 		if parametersPath != "" {
 			b, err := json.Marshal(parameters)
 			if err != nil {
@@ -147,7 +157,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		server := NewServer(viper.GetString("address"), opts...)
+		server := NewServer(opts...)
 
 		done := make(chan struct{})
 
@@ -184,7 +194,7 @@ var rootCmd = &cobra.Command{
 		}()
 
 		go func() {
-			server.Listen()
+			server.Listen(listener)
 		}()
 
 		<-done

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync/atomic"
@@ -39,7 +40,7 @@ type Middleware interface {
 	WrapHTTP(http.Handler) http.Handler
 }
 
-func (s *Server) Listen() {
+func (s *Server) Listen(listener net.Listener) {
 	// Print debug output on an interval. This helps with providing insight
 	// into activity without saturating IO.
 	ticker := time.NewTicker(5 * time.Second)
@@ -56,9 +57,9 @@ func (s *Server) Listen() {
 		}
 	}()
 
-	s.logger.Println("Server is ready to handle requests at", s.server.Addr)
+	s.logger.Println("Server is ready to handle requests at", listener.Addr().String())
 	atomic.StoreInt32(&healthy, 1)
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := s.server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		s.logger.Fatalf("Could not listen on %s: %v\n", s.server.Addr, err)
 	}
 }
@@ -104,7 +105,7 @@ func WithError(errorer Middleware) func(*ServerOptions) {
 	}
 }
 
-func NewServer(address string, opts ...func(*ServerOptions)) *Server {
+func NewServer(opts ...func(*ServerOptions)) *Server {
 	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
 	logger.Println("Server is starting...")
 
@@ -115,7 +116,6 @@ func NewServer(address string, opts ...func(*ServerOptions)) *Server {
 	}
 
 	httpServer := &http.Server{
-		Addr:         address,
 		Handler:      tracing(nextRequestID)(logging(logger)(router)),
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
