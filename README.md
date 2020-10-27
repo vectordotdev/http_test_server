@@ -9,6 +9,14 @@ This is used in [Vector]'s [test harness] to test and benchmark HTTP performance
 1. Run `go build`
 2. Run `./http_test_server`
 
+### Docker image
+
+The HTTP test server is also available as a Docker image:
+
+```bash
+docker pull timberiodev/http_test_server:latest
+```
+
 ## Testing
 
 The HTTP test server exposes some configuration that can be used to artifically
