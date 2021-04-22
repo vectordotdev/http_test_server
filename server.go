@@ -150,6 +150,7 @@ func NewServer(opts ...func(*ServerOptions)) *Server {
 	indexHandler = serverOptions.Error.WrapHTTP(indexHandler)
 	indexHandler = serverOptions.RateLimiter.WrapHTTP(indexHandler)
 	indexHandler = server.statisticsMiddleware.WrapHTTP(indexHandler)
+	indexHandler = NewCompressionMiddleware().WrapHTTP(indexHandler)
 	router.Handle("/", indexHandler)
 
 	router.HandleFunc("/_health", server.Health)
