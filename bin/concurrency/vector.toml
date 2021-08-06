@@ -3,6 +3,7 @@
   batch_interval = 0.001
   lines = ["hello"]
   sequence = true
+  format = "shuffle"
 
 [sinks.out]
   type = "http"
