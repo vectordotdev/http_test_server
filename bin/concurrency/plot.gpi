@@ -58,7 +58,8 @@ plot infile_active using 1:2 with linespoints
 
 #
 
+set key on default
 set title "Request Rate"
 set xlabel "Offset from start (ms)"
 set ylabel "Requests / s"
-plot infile_rate using 1:2 with linespoints
+plot infile_rate using 1:2 with linespoints title "Issued", infile_rate using 1:3 with linespoints title "Accepted"
