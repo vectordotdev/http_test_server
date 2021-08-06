@@ -21,4 +21,7 @@ timeout --signal KILL ${TEST_TIME} bash -c "${TEST_CMD}" 2>"${OUTPUT_DIR}/test_c
 
 wait
 
-exec "$DIR/plot-concurrency" "$1"
+if [ -z "$NO_PLOT" ]
+then
+    exec "$DIR/plot-concurrency-test" "$1"
+fi
