@@ -3,6 +3,7 @@
   batch_interval = 0.001
   lines = ["hello"]
   sequence = true
+  format = "shuffle"
 
 [sinks.out]
   type = "http"
@@ -14,6 +15,9 @@
 
   request.in_flight_limit = ${VECTOR_REQUEST_IN_FLIGHT_LIMIT:-"adaptive"}
   request.rate_limit_num = 9223372036854775807 # max i64 (https://github.com/timberio/vector/issues/3499)
+  request.adaptive_concurrency.ewma_alpha = ${VECTOR_REQUEST_EWMA_ALPHA:-0.4}
+  request.adaptive_concurrency.decrease_ratio = ${VECTOR_REQUEST_DECREASE_RATIO:-0.9}
+  request.adaptive_concurrency.rtt_deviation_scale = ${VECTOR_REQUEST_RTT_DEVIATION_SCALE:-2.5}
 
   buffer.max_events = 1000
   buffer.type = "memory"

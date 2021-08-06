@@ -1,0 +1,23 @@
+#!/bin/bash
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+source "$DIR/concurrency-common.sh"
+
+echo "processing output"
+${DIR}/concurrency/summary_to_concurrent_requests_dat.rb < ${HTTP_TEST_SUMMARY_PATH} > ${OUTPUT_DIR}/concurrent_requests.dat
+${DIR}/concurrency/summary_to_requests_dat.rb < ${HTTP_TEST_SUMMARY_PATH} > ${OUTPUT_DIR}/requests.dat
+${DIR}/concurrency/summary_to_requests_per_second.rb < ${HTTP_TEST_SUMMARY_PATH} > ${OUTPUT_DIR}/request_rate.dat
+
+echo "plotting"
+gnuplot \
+  -e "test_time='${TEST_TIME}'" \
+  -e "test_name='${HTTP_TEST_NAME}'" \
+  -e "test_description='${HTTP_TEST_DESCRIPTION}'" \
+  -e "parameters='$(cat ${HTTP_TEST_PARAMETERS_PATH} | jq '. | to_entries | map("\(.key)=\(.value)") | .[]' -r)'" \
+  -e "infile_active='${OUTPUT_DIR}/concurrent_requests.dat'" \
+  -e "infile_rate='${OUTPUT_DIR}/request_rate.dat'" \
+  -e "infile_lifetime='${OUTPUT_DIR}/requests.dat'" \
+  -e "outfile='${OUTPUT_DIR}/plot.svg'" \
+  -e "expected_rate=${HTTP_TEST_EXPECTED_RATE}" \
+  ${DIR}/concurrency/plot.gpi
+
+convert "${OUTPUT_DIR}/plot.svg" "${OUTPUT_DIR}/plot.png"

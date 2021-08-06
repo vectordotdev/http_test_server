@@ -8,22 +8,12 @@ PARALLEL="${PARALLEL:-$(nproc)}"
 
 echo "writing results under ${OUTPUT_DIR}"
 
-# TODO(jesse) better free port detectian
-next_port() {
-  BASE_PORT=16998
-
-  echo $((${BASE_PORT}+${PARALLEL_SEQ}))
-}
-export -f next_port
-
 run_test() {
   suite=$1
   HTTP_TEST_NAME="${1##*/}"
   HTTP_TEST_NAME="${HTTP_TEST_NAME%.sh}"
 
   echo "running concurrency test: ${HTTP_TEST_NAME}"
-
-  export HTTP_TEST_ADDRESS="localhost:$(next_port)"
 
   TEST_OUTPUT_DIR="${OUTPUT_DIR}/${HTTP_TEST_NAME}"
   mkdir "${TEST_OUTPUT_DIR}"

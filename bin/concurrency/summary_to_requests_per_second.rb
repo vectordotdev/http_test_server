@@ -12,11 +12,11 @@ require 'json'
 
 # TODO(jesse) Also plot other HTTP statuses?
 
-step = (1.to_f/24/60/60) # 1s step (in fraction of days)
+SECONDS = 24 * 60 * 60 # Scale up the parsed date to seconds
 
 summary = JSON.parse(STDIN.read)
 
-requests = summary["requests"].select { |r| r["status"] == 204 }.map do |r|
+requests = summary["requests"].map do |r|
   r["start"] = DateTime.parse(r["start"])
   r["end"] = DateTime.parse(r["end"])
 
@@ -25,13 +25,15 @@ end
 
 start_time = requests.map{ |r| r["start"] }.min
 end_time = requests.map{ |r| r["end"] }.max
+duration = Integer((end_time - start_time) * SECONDS)
 
-puts "# offset (ms), req/s"
-start_time.step(end_time, step).each do |d|
-  num_active = requests.select do |r|
-    r["end"] > d and r["end"] < (d + step)
-  end.length
+issued_requests = requests.map { |r| Integer((r["start"] - start_time) * SECONDS) }
+success_requests = requests.select { |r| r["status"] == 204 }.map { |r| Integer((r["end"] - start_time) * SECONDS) }
 
-  # date subtraction gives fraction of days, multiply to get ms
-  puts "%d,%d" % [(d - start_time) * 60 * 60 * 24 * 1000, num_active]
+puts "# offset (seconds), issued req/sec, success req/sec"
+duration.times do |ts|
+  num_issued = issued_requests.count { |r| r == ts }
+  num_success = success_requests.count { |r| r == ts }
+
+  puts "%d,%d,%d" % [ts * 1000, num_issued, num_success]
 end

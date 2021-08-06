@@ -9,8 +9,9 @@ set multiplot layout 1,3 title sprintf("test: %s\n%s\n%s", test_name, test_descr
 set datafile separator ','
 
 set xrange[0:test_time*1000]
-set xtics rotate by -45 1000
-set grid
+set xtics rotate by -45 5000
+set mxtics 5
+set grid xtics mxtics ytics
 unset key
 
 #
@@ -57,7 +58,9 @@ plot infile_active using 1:2 with linespoints
 
 #
 
+set key on default
+set yrange[0:expected_rate*2]
 set title "Request Rate"
 set xlabel "Offset from start (ms)"
 set ylabel "Requests / s"
-plot infile_rate using 1:2 with linespoints
+plot infile_rate using 1:2 with linespoints title "Issued", infile_rate using 1:3 with linespoints title "Accepted"
