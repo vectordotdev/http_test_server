@@ -17,6 +17,7 @@ gnuplot \
   -e "infile_rate='${OUTPUT_DIR}/request_rate.dat'" \
   -e "infile_lifetime='${OUTPUT_DIR}/requests.dat'" \
   -e "outfile='${OUTPUT_DIR}/plot.svg'" \
+  -e "expected_rate=${HTTP_TEST_EXPECTED_RATE}" \
   ${DIR}/concurrency/plot.gpi
 
 convert "${OUTPUT_DIR}/plot.svg" "${OUTPUT_DIR}/plot.png"

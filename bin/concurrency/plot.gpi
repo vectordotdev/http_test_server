@@ -59,6 +59,7 @@ plot infile_active using 1:2 with linespoints
 #
 
 set key on default
+set yrange[0:expected_rate*2]
 set title "Request Rate"
 set xlabel "Offset from start (ms)"
 set ylabel "Requests / s"
