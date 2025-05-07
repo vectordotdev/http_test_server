@@ -18,10 +18,17 @@ run_test() {
   TEST_OUTPUT_DIR="${OUTPUT_DIR}/${HTTP_TEST_NAME}"
   mkdir "${TEST_OUTPUT_DIR}"
 
-  OUTPUT_DIR="${TEST_OUTPUT_DIR}" ${DIR}/run-concurrency-test "$suite" > >(sed "s/^/${HTTP_TEST_NAME}: /")  2> >(sed "s/^/${HTTP_TEST_NAME}: /" >&2)
+  OUTPUT_DIR="${TEST_OUTPUT_DIR}" NO_PLOT=1 ${DIR}/run-concurrency-test "$suite" > >(sed "s/^/${HTTP_TEST_NAME}: /")  2> >(sed "s/^/${HTTP_TEST_NAME}: /" >&2)
 }
 export -f run_test
 
 parallel --will-cite --line-buffer --max-procs "${PARALLEL}" run_test '{}' ::: "$DIR"/concurrency/suite/*.sh
+
+for script in "$DIR"/concurrency/suite/*.sh
+do
+    HTTP_TEST_NAME="${script##*/}"
+    HTTP_TEST_NAME="${HTTP_TEST_NAME%.sh}"
+    OUTPUT_DIR="${OUTPUT_DIR}/${HTTP_TEST_NAME}" "$DIR/plot-concurrency-test" "$script"
+done
 
 echo "wrote results under ${OUTPUT_DIR}"
